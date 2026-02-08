@@ -81,31 +81,53 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Extract the calendar date (YYYY-MM-DD) from a TickTick date string.
+ * TickTick dates include timezone offsets (e.g. "2026-02-08T10:00:00.000+0530"),
+ * so we extract the date portion directly rather than converting through UTC.
+ */
+function extractCalendarDate(dateStr: string): string {
+  return dateStr.slice(0, 10);
+}
+
+function getTodayInTimeZone(tz?: string): string {
+  try {
+    if (tz) {
+      const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      return parts;
+    }
+  } catch {
+    // fall through to UTC
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 function matchesDueFilter(task: TickTickTask, filter: TaskDueFilter): boolean {
   if (!task.dueDate) {
     return false;
   }
 
-  const now = new Date();
-  const due = new Date(task.dueDate);
-
-  const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const tomorrow = new Date(startOfDay);
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  const dayAfterTomorrow = new Date(tomorrow);
-  dayAfterTomorrow.setUTCDate(dayAfterTomorrow.getUTCDate() + 1);
-  const weekLater = new Date(startOfDay);
-  weekLater.setUTCDate(weekLater.getUTCDate() + 7);
+  const dueDate = extractCalendarDate(task.dueDate);
+  const today = getTodayInTimeZone(task.timeZone);
+  const tomorrow = addDays(today, 1);
+  const dayAfterTomorrow = addDays(today, 2);
+  const weekLater = addDays(today, 7);
 
   switch (filter) {
     case 'today':
-      return due >= startOfDay && due < tomorrow;
+      return dueDate <= today;
     case 'tomorrow':
-      return due >= tomorrow && due < dayAfterTomorrow;
+      return dueDate >= tomorrow && dueDate < dayAfterTomorrow;
     case 'overdue':
-      return due < now;
+      return dueDate < today;
     case 'this_week':
-      return due >= startOfDay && due < weekLater;
+      return dueDate <= today || (dueDate >= today && dueDate < weekLater);
     default:
       return false;
   }
@@ -121,7 +143,7 @@ export class TickTickClient {
   constructor(
     private readonly env: Env,
     private readonly props: Props,
-    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly fetchImpl: typeof fetch = fetch.bind(globalThis),
   ) {}
 
   private get baseUrl(): string {
@@ -336,7 +358,12 @@ export class TickTickClient {
         return undefined as T;
       }
 
-      return (await response.json()) as T;
+      const text = await response.text();
+      if (!text) {
+        return undefined as T;
+      }
+
+      return JSON.parse(text) as T;
     }
 
     throw new TickTickApiError('TickTick API request retries exhausted', 502);

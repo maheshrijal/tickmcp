@@ -31,6 +31,8 @@ export interface TickTickTask {
   startDate?: string;
   status?: number;
   priority?: number;
+  timeZone?: string;
+  isAllDay?: boolean;
 }
 
 export interface TickTickProject {

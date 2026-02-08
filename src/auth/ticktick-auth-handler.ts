@@ -1,6 +1,6 @@
 import { type AuthRequest, type OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 import { Props } from './props';
-import { exchangeTickTickCode, getTickTickUserIdentity } from './ticktick-upstream';
+import { exchangeTickTickCode } from './ticktick-upstream';
 import { OAuthStatesRepository, UsersRepository } from '../db/repositories';
 import { Env } from '../types/env';
 
@@ -19,6 +19,11 @@ async function sha256Base64Url(input: string): Promise<string> {
     binary += String.fromCharCode(b);
   }
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function deriveSubjectFromToken(accessToken: string): Promise<string> {
+  const hash = await sha256Base64Url(`ticktick:${accessToken}`);
+  return `tt_${hash.slice(0, 32)}`;
 }
 
 function getAuthUrl(env: Env): string {
@@ -445,52 +450,59 @@ async function handleCallback(request: Request, env: Env, baseUrl: string): Prom
     return new Response('Invalid or expired OAuth state', { status: 400 });
   }
 
-  // Exchange code for TickTick tokens
-  const redirectUri = `${baseUrl}/callback`;
-  const tokenResponse = await exchangeTickTickCode(code, stored.codeVerifier, redirectUri, env);
+  try {
+    // Exchange code for TickTick tokens
+    const redirectUri = `${baseUrl}/callback`;
+    const tokenResponse = await exchangeTickTickCode(code, stored.codeVerifier, redirectUri, env);
 
-  if (!tokenResponse.access_token) {
-    return new Response('TickTick token response is missing access token', { status: 502 });
+    if (!tokenResponse.access_token) {
+      return new Response('TickTick token response is missing access token', { status: 502 });
+    }
+
+    // Derive a stable user subject from the access token (TickTick Open API has no user info endpoint)
+    const subject = await deriveSubjectFromToken(tokenResponse.access_token);
+
+    // Ensure user exists in D1
+    const usersRepo = new UsersRepository(env.DB);
+    const user = await usersRepo.ensureBySubject(subject);
+
+    // Compute expires_at
+    const expiresAt = tokenResponse.expires_in
+      ? new Date(Date.now() + Math.max(0, tokenResponse.expires_in - 30) * 1000).toISOString()
+      : null;
+
+    const props: Props = {
+      userId: user.id,
+    };
+
+    await env.OAUTH_KV.put(
+      `ticktick_tokens:${user.id}`,
+      JSON.stringify({
+        accessToken: tokenResponse.access_token,
+        refreshToken: tokenResponse.refresh_token ?? null,
+        expiresAt: expiresAt,
+        scope: tokenResponse.scope ?? getScope(env),
+        updatedAt: new Date().toISOString(),
+      }),
+      { expirationTtl: 60 * 60 * 24 * 30 },
+    );
+
+    // Complete the MCP OAuth authorization — this generates an authorization code
+    // and redirects the user back to the MCP client
+    const oauthHelpers: OAuthHelpers = env.OAUTH_PROVIDER;
+    const { redirectTo } = await oauthHelpers.completeAuthorization({
+      request: stored.mcpOAuthRequest,
+      userId: user.id,
+      metadata: { label: 'TickTick' },
+      scope: stored.mcpOAuthRequest.scope ?? [],
+      props,
+    });
+
+    return Response.redirect(redirectTo, 302);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const details = err instanceof Error ? err.stack : undefined;
+    console.error('OAuth callback failed', { error: message, stack: details });
+    return new Response(`Authorization failed: ${message}`, { status: 502 });
   }
-
-  // Get TickTick user identity
-  const userInfo = await getTickTickUserIdentity(tokenResponse.access_token, env);
-
-  // Ensure user exists in D1
-  const usersRepo = new UsersRepository(env.DB);
-  const user = await usersRepo.ensureBySubject(userInfo.subject);
-
-  // Compute expires_at
-  const expiresAt = tokenResponse.expires_in
-    ? new Date(Date.now() + Math.max(0, tokenResponse.expires_in - 30) * 1000).toISOString()
-    : null;
-
-  const props: Props = {
-    userId: user.id,
-  };
-
-  await env.OAUTH_KV.put(
-    `ticktick_tokens:${user.id}`,
-    JSON.stringify({
-      accessToken: tokenResponse.access_token,
-      refreshToken: tokenResponse.refresh_token ?? null,
-      expiresAt: expiresAt,
-      scope: tokenResponse.scope ?? getScope(env),
-      updatedAt: new Date().toISOString(),
-    }),
-    { expirationTtl: 60 * 60 * 24 * 30 },
-  );
-
-  // Complete the MCP OAuth authorization — this generates an authorization code
-  // and redirects the user back to the MCP client
-  const oauthHelpers: OAuthHelpers = env.OAUTH_PROVIDER;
-  const { redirectTo } = await oauthHelpers.completeAuthorization({
-    request: stored.mcpOAuthRequest,
-    userId: user.id,
-    metadata: { label: `TickTick (${userInfo.displayName ?? userInfo.subject})` },
-    scope: stored.mcpOAuthRequest.scope ?? [],
-    props,
-  });
-
-  return Response.redirect(redirectTo, 302);
 }

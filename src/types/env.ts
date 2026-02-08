@@ -3,6 +3,7 @@ import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 export interface Env {
   DB: D1Database;
   OAUTH_KV: KVNamespace;
+  MCP_OBJECT: DurableObjectNamespace;
 
   COOKIE_ENCRYPTION_KEY: string;
 

@@ -119,7 +119,7 @@ export async function exchangeTickTickCode(
   codeVerifier: string,
   redirectUri: string,
   env: Env,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = fetch.bind(globalThis),
 ): Promise<TickTickTokenResponse> {
   const payload = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -189,7 +189,7 @@ export async function exchangeTickTickCode(
 export async function refreshTickTickToken(
   refreshToken: string,
   env: Env,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = fetch.bind(globalThis),
 ): Promise<TickTickTokenResponse> {
   const payload = new URLSearchParams({
     grant_type: 'refresh_token',
@@ -262,30 +262,35 @@ export interface TickTickUserInfo {
 function normalizeUserInfoBody(body: Record<string, unknown>): TickTickUserInfo {
   const username = asString(body.username);
   const email = asString(body.email);
-  const userId = asString(body.userId) ?? asString(body.user_id) ?? asString(body.uid) ?? asString(body.id);
+  const profileId = asString(body.profileId) ?? asString(body.profile_id);
+  const inboxId = asString(body.inboxId) ?? asString(body.inbox_id);
+  const userId =
+    asString(body.userId) ?? asString(body.user_id) ?? asString(body.uid) ?? asString(body.id);
 
-  const subject = username ?? email ?? userId;
+  console.log('TickTick user info response', JSON.stringify(body));
+
+  const subject = username ?? email ?? profileId ?? userId ?? inboxId;
   if (!subject) {
     throw new TickTickApiError('TickTick user identity response is missing a usable subject', 502, { body });
   }
 
   return {
     subject,
-    displayName: username ?? email ?? userId,
+    displayName: username ?? email ?? subject,
   };
 }
 
 export async function getTickTickUserIdentity(
   accessToken: string,
   env: Env,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: typeof fetch = fetch.bind(globalThis),
 ): Promise<TickTickUserInfo> {
   const baseUrl = env.TICKTICK_BASE_URL ?? 'https://api.ticktick.com/open/v1';
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
       const response = await fetchWithTimeout(
-        `${baseUrl}/user/info`,
+        `${baseUrl}/user`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },
         },

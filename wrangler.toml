@@ -22,6 +22,15 @@ TICKTICK_AUTH_URL = "https://ticktick.com/oauth/authorize"
 TICKTICK_TOKEN_URL = "https://ticktick.com/oauth/token"
 TICKTICK_OAUTH_SCOPE = "tasks:read tasks:write"
 
+[durable_objects]
+bindings = [
+  { name = "MCP_OBJECT", class_name = "TickMcpAgent" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TickMcpAgent"]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "tickmcp-dev"
@@ -59,6 +68,15 @@ TICKTICK_BASE_URL = "https://api.ticktick.com/open/v1"
 TICKTICK_AUTH_URL = "https://ticktick.com/oauth/authorize"
 TICKTICK_TOKEN_URL = "https://ticktick.com/oauth/token"
 TICKTICK_OAUTH_SCOPE = "tasks:read tasks:write"
+
+[env.production.durable_objects]
+bindings = [
+  { name = "MCP_OBJECT", class_name = "TickMcpAgent" }
+]
+
+[[env.production.migrations]]
+tag = "v1"
+new_sqlite_classes = ["TickMcpAgent"]
 
 [[env.production.d1_databases]]
 binding = "DB"

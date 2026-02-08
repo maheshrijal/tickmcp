@@ -92,7 +92,7 @@ describe('ticktick-upstream helpers', () => {
     expect(info.displayName).toBe('testuser123');
 
     const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe('https://api.ticktick.com/open/v1/user/info');
+    expect(url).toBe('https://api.ticktick.com/open/v1/user');
   });
 
   it('falls back to email when username is missing', async () => {

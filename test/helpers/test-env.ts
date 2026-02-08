@@ -37,6 +37,7 @@ export function createTestEnv(overrides?: Partial<Env>): { env: Env; db: MemoryD
     TICKTICK_TOKEN_URL: 'https://ticktick.com/oauth/token',
     TICKTICK_OAUTH_SCOPE: 'tasks:read tasks:write',
     OAUTH_PROVIDER: {} as any,
+    MCP_OBJECT: {} as unknown as DurableObjectNamespace,
     MCP_RATE_LIMITER: { limit: async () => ({ success: true }) } as unknown as RateLimit,
     AUTH_RATE_LIMITER: { limit: async () => ({ success: true }) } as unknown as RateLimit,
     ...overrides,
