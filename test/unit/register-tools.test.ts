@@ -49,10 +49,6 @@ const stubEnv = {
 
 const stubProps: Props = {
   userId: 'test-user',
-  tickTickAccessToken: 'test-token',
-  tickTickRefreshToken: 'test-refresh',
-  tickTickExpiresAt: null,
-  tickTickScope: 'tasks:read tasks:write',
 };
 
 describe('register-tools metadata', () => {

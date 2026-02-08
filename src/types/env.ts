@@ -18,4 +18,5 @@ export interface Env {
   OAUTH_PROVIDER: OAuthHelpers;
 
   MCP_RATE_LIMITER: RateLimit;
+  AUTH_RATE_LIMITER: RateLimit;
 }

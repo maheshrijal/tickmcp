@@ -1,6 +1,14 @@
 export class AuditEventsRepository {
   constructor(private readonly db: D1Database) {}
 
+  async deleteOlderThan(cutoffIso: string): Promise<number> {
+    const result = await this.db
+      .prepare('DELETE FROM audit_events WHERE created_at < ?')
+      .bind(cutoffIso)
+      .run();
+    return result.meta.changes ?? 0;
+  }
+
   async insert(params: {
     userId: string;
     eventType: string;

@@ -127,7 +127,6 @@ export async function exchangeTickTickCode(
     redirect_uri: redirectUri,
     code_verifier: codeVerifier,
     client_id: env.TICKTICK_CLIENT_ID,
-    client_secret: env.TICKTICK_CLIENT_SECRET,
   });
 
   let lastError: unknown;
@@ -195,7 +194,6 @@ export async function refreshTickTickToken(
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
     client_id: env.TICKTICK_CLIENT_ID,
-    client_secret: env.TICKTICK_CLIENT_SECRET,
   });
 
   let lastError: unknown;

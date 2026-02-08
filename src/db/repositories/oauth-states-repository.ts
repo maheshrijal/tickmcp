@@ -36,6 +36,14 @@ export class OAuthStatesRepository {
       .run();
   }
 
+  async deleteExpired(nowIso: string): Promise<number> {
+    const result = await this.db
+      .prepare('DELETE FROM oauth_states WHERE expires_at <= ?')
+      .bind(nowIso)
+      .run();
+    return result.meta.changes ?? 0;
+  }
+
   async consume(state: string, nowIso: string): Promise<StoredOAuthState | null> {
     const row = await this.db
       .prepare(

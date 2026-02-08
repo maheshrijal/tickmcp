@@ -43,7 +43,6 @@ const MAX_BACKOFF_RETRIES = 3;
 const BACKOFF_BASE_MS = 150;
 const REQUEST_TIMEOUT_MS = 8_000;
 const TOKEN_KV_TTL_SECONDS = 60 * 60 * 24 * 30;
-const refreshLocks = new Map<string, Promise<void>>();
 
 interface PersistedTokens {
   accessToken: string;
@@ -113,16 +112,17 @@ function matchesDueFilter(task: TickTickTask, filter: TaskDueFilter): boolean {
 }
 
 export class TickTickClient {
-  private accessToken: string;
+  private accessToken: string = '';
+  private storedRefreshToken: string | null = null;
+  private tokenExpiresAt: string | null = null;
+  private tokenScope: string = '';
   private hydratedFromKv = false;
 
   constructor(
     private readonly env: Env,
     private readonly props: Props,
     private readonly fetchImpl: typeof fetch = fetch,
-  ) {
-    this.accessToken = props.tickTickAccessToken;
-  }
+  ) {}
 
   private get baseUrl(): string {
     return this.env.TICKTICK_BASE_URL ?? 'https://api.ticktick.com/open/v1';
@@ -161,12 +161,11 @@ export class TickTickClient {
       const parsed = JSON.parse(raw) as PersistedTokens;
       if (parsed.accessToken) {
         this.accessToken = parsed.accessToken;
-        this.props.tickTickAccessToken = parsed.accessToken;
       }
-      this.props.tickTickRefreshToken = parsed.refreshToken ?? this.props.tickTickRefreshToken;
-      this.props.tickTickExpiresAt = parsed.expiresAt ?? this.props.tickTickExpiresAt;
+      this.storedRefreshToken = parsed.refreshToken ?? this.storedRefreshToken;
+      this.tokenExpiresAt = parsed.expiresAt ?? this.tokenExpiresAt;
       if (parsed.scope) {
-        this.props.tickTickScope = parsed.scope;
+        this.tokenScope = parsed.scope;
       }
     } catch {
       // Ignore malformed persisted token payloads.
@@ -174,10 +173,10 @@ export class TickTickClient {
   }
 
   private isTokenExpired(): boolean {
-    if (!this.props.tickTickExpiresAt) {
+    if (!this.tokenExpiresAt) {
       return false;
     }
-    return new Date(this.props.tickTickExpiresAt).getTime() <= Date.now();
+    return new Date(this.tokenExpiresAt).getTime() <= Date.now();
   }
 
   private getExpiresAt(expiresIn?: number): string | null {
@@ -202,10 +201,10 @@ export class TickTickClient {
 
   private async persistTokensToKv(): Promise<void> {
     const payload: PersistedTokens = {
-      accessToken: this.props.tickTickAccessToken,
-      refreshToken: this.props.tickTickRefreshToken,
-      expiresAt: this.props.tickTickExpiresAt,
-      scope: this.props.tickTickScope,
+      accessToken: this.accessToken,
+      refreshToken: this.storedRefreshToken,
+      expiresAt: this.tokenExpiresAt,
+      scope: this.tokenScope,
       updatedAt: new Date().toISOString(),
     };
     await this.env.OAUTH_KV.put(this.tokensKvKey, JSON.stringify(payload), {
@@ -214,18 +213,17 @@ export class TickTickClient {
   }
 
   private async doRefreshToken(): Promise<void> {
-    if (!this.props.tickTickRefreshToken) {
+    if (!this.storedRefreshToken) {
       throw new TickTickAuthRequiredError();
     }
 
     try {
-      const refreshed = await refreshTickTickToken(this.props.tickTickRefreshToken, this.env, this.fetchImpl);
+      const refreshed = await refreshTickTickToken(this.storedRefreshToken, this.env, this.fetchImpl);
       this.accessToken = refreshed.access_token;
-      this.props.tickTickAccessToken = refreshed.access_token;
-      this.props.tickTickRefreshToken = refreshed.refresh_token ?? this.props.tickTickRefreshToken;
-      this.props.tickTickExpiresAt = this.getExpiresAt(refreshed.expires_in);
+      this.storedRefreshToken = refreshed.refresh_token ?? this.storedRefreshToken;
+      this.tokenExpiresAt = this.getExpiresAt(refreshed.expires_in);
       if (refreshed.scope) {
-        this.props.tickTickScope = refreshed.scope;
+        this.tokenScope = refreshed.scope;
       }
       await this.persistTokensToKv();
     } catch (error) {
@@ -237,17 +235,30 @@ export class TickTickClient {
   }
 
   private async refreshToken(): Promise<void> {
-    const lockKey = this.props.userId;
-    const inFlight = refreshLocks.get(lockKey);
-    if (inFlight) {
-      return inFlight;
+    const lockKey = `ticktick_refresh_lock:${this.props.userId}`;
+    const previousToken = this.accessToken;
+
+    const existing = await this.env.OAUTH_KV.get(lockKey);
+    if (existing) {
+      await sleep(300);
+      this.hydratedFromKv = false;
+      await this.hydrateTokensFromKv();
+      if (this.accessToken !== previousToken) {
+        return;
+      }
     }
 
-    const refreshPromise = this.doRefreshToken().finally(() => {
-      refreshLocks.delete(lockKey);
-    });
-    refreshLocks.set(lockKey, refreshPromise);
-    return refreshPromise;
+    await this.env.OAUTH_KV.put(lockKey, '1', { expirationTtl: 30 });
+    try {
+      this.hydratedFromKv = false;
+      await this.hydrateTokensFromKv();
+      if (this.accessToken !== previousToken) {
+        return;
+      }
+      await this.doRefreshToken();
+    } finally {
+      await this.env.OAUTH_KV.delete(lockKey);
+    }
   }
 
   private async callApi<T>(params: {
@@ -257,6 +268,10 @@ export class TickTickClient {
   }): Promise<T> {
     const method = params.method ?? 'GET';
     await this.hydrateTokensFromKv();
+
+    if (!this.accessToken) {
+      throw new TickTickAuthRequiredError();
+    }
 
     // Proactively refresh if token is expired
     if (this.isTokenExpired()) {

@@ -38,6 +38,7 @@ export function createTestEnv(overrides?: Partial<Env>): { env: Env; db: MemoryD
     TICKTICK_OAUTH_SCOPE: 'tasks:read tasks:write',
     OAUTH_PROVIDER: {} as any,
     MCP_RATE_LIMITER: { limit: async () => ({ success: true }) } as unknown as RateLimit,
+    AUTH_RATE_LIMITER: { limit: async () => ({ success: true }) } as unknown as RateLimit,
     ...overrides,
   };
 

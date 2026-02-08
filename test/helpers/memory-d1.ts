@@ -54,6 +54,7 @@ export class MemoryD1Database {
   private readonly usersBySubject = new Map<string, string>();
   private readonly auditEvents: AuditRow[] = [];
   private readonly oauthStates = new Map<string, OAuthStateRow>();
+  private readonly idempotencyKeys = new Map<string, string>();
 
   prepare(query: string): D1PreparedStatement {
     return new MemoryD1PreparedStatement(this, query) as unknown as D1PreparedStatement;
@@ -111,6 +112,28 @@ export class MemoryD1Database {
         expires_at: expiresAt,
         created_at: createdAt,
       });
+      return 1;
+    }
+
+    if (normalized.startsWith('delete from idempotency_keys')) {
+      const [cutoff] = params as [string];
+      let deleted = 0;
+      for (const [composite, createdAt] of this.idempotencyKeys) {
+        if (createdAt < cutoff) {
+          this.idempotencyKeys.delete(composite);
+          deleted++;
+        }
+      }
+      return deleted;
+    }
+
+    if (normalized.startsWith('insert into idempotency_keys')) {
+      const [userId, operation, key, createdAt] = params as [string, string, string, string];
+      const composite = `${userId}:${operation}:${key}`;
+      if (this.idempotencyKeys.has(composite)) {
+        throw new Error('UNIQUE constraint failed: idempotency_keys.user_id, idempotency_keys.operation, idempotency_keys.key');
+      }
+      this.idempotencyKeys.set(composite, createdAt);
       return 1;
     }
 

@@ -26,3 +26,13 @@ CREATE TABLE IF NOT EXISTS oauth_states (
 CREATE INDEX IF NOT EXISTS idx_users_mcp_subject ON users(mcp_subject);
 CREATE INDEX IF NOT EXISTS idx_audit_events_user_id_created_at ON audit_events(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_oauth_states_expires_at ON oauth_states(expires_at);
+
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  user_id TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  key TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, operation, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created_at ON idempotency_keys(created_at);

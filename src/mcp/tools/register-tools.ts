@@ -84,7 +84,7 @@ export function registerTickTickTools(server: McpServer, env: Env, props: Props)
       title: 'Check TickTick Auth Status',
       description: `Check the TickTick OAuth connection status for the current user.
 
-Returns: { ok, userId, connected, expiresAt }
+Returns: { ok, userId, connected }
 - connected is always true (user is authenticated via OAuth).
 
 Use when: "Am I connected to TickTick?" or before making TickTick calls to verify auth status.
@@ -108,7 +108,7 @@ Errors:
             code: 'OK',
             userId: props.userId,
             connected: true,
-            expiresAt: props.tickTickExpiresAt,
+            expiresAt: null,
             authUrl: null,
           },
           `TickTick is connected for user ${props.userId}`,

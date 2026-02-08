@@ -2,7 +2,6 @@ import { Env } from '../types/env';
 import { ValidationAppError } from '../utils/errors';
 
 const DEFAULT_IDEMPOTENCY_TTL_SECONDS = 10 * 60;
-const IDEMPOTENCY_KEY_PREFIX = 'idempotency';
 
 function normalizeIdempotencyKey(key: string): string {
   return key.trim();
@@ -19,16 +18,21 @@ export async function guardIdempotency(
     throw new ValidationAppError('idempotencyKey is required for mutating operations');
   }
 
-  const composite = `${IDEMPOTENCY_KEY_PREFIX}:${userId}:${operation}:${normalized}`;
-  const existing = await env.OAUTH_KV.get(composite);
-  if (existing) {
-    throw new ValidationAppError('Duplicate idempotency key for mutating operation', {
-      operation,
-      idempotencyKey: normalized,
-    });
-  }
+  const cutoff = new Date(Date.now() - DEFAULT_IDEMPOTENCY_TTL_SECONDS * 1000).toISOString();
+  await env.DB.prepare('DELETE FROM idempotency_keys WHERE created_at < ?').bind(cutoff).run();
 
-  // KV does not provide strict atomic set-if-not-exists semantics.
-  // This still provides durable best-effort deduplication across worker instances.
-  await env.OAUTH_KV.put(composite, '1', { expirationTtl: DEFAULT_IDEMPOTENCY_TTL_SECONDS });
+  try {
+    await env.DB
+      .prepare('INSERT INTO idempotency_keys (user_id, operation, key, created_at) VALUES (?, ?, ?, ?)')
+      .bind(userId, operation, normalized, new Date().toISOString())
+      .run();
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes('UNIQUE') || error.message.includes('PRIMARY KEY') || error.message.includes('constraint'))) {
+      throw new ValidationAppError('Duplicate idempotency key for mutating operation', {
+        operation,
+        idempotencyKey: normalized,
+      });
+    }
+    throw error;
+  }
 }

@@ -33,8 +33,13 @@ function getBaseUrl(request: Request, env: Env): string {
   const requestUrl = new URL(request.url);
   const isLocal =
     requestUrl.hostname === 'localhost' || requestUrl.hostname === '127.0.0.1' || requestUrl.hostname === '::1';
-  const base = env.PUBLIC_BASE_URL && !isLocal ? env.PUBLIC_BASE_URL : requestUrl.origin;
-  return base.replace(/\/$/, '');
+  if (isLocal) {
+    return (env.PUBLIC_BASE_URL ?? requestUrl.origin).replace(/\/$/, '');
+  }
+  if (!env.PUBLIC_BASE_URL) {
+    throw new Error('PUBLIC_BASE_URL must be configured in production');
+  }
+  return env.PUBLIC_BASE_URL.replace(/\/$/, '');
 }
 
 function faviconSvg(): string {
@@ -558,19 +563,15 @@ async function handleCallback(request: Request, env: Env, baseUrl: string): Prom
 
   const props: Props = {
     userId: user.id,
-    tickTickAccessToken: tokenResponse.access_token,
-    tickTickRefreshToken: tokenResponse.refresh_token ?? null,
-    tickTickExpiresAt: expiresAt,
-    tickTickScope: tokenResponse.scope ?? getScope(env),
   };
 
   await env.OAUTH_KV.put(
     `ticktick_tokens:${user.id}`,
     JSON.stringify({
-      accessToken: props.tickTickAccessToken,
-      refreshToken: props.tickTickRefreshToken,
-      expiresAt: props.tickTickExpiresAt,
-      scope: props.tickTickScope,
+      accessToken: tokenResponse.access_token,
+      refreshToken: tokenResponse.refresh_token ?? null,
+      expiresAt: expiresAt,
+      scope: tokenResponse.scope ?? getScope(env),
       updatedAt: new Date().toISOString(),
     }),
     { expirationTtl: 60 * 60 * 24 * 30 },

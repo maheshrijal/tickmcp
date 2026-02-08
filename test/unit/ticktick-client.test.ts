@@ -7,22 +7,43 @@ import { TickTickAuthRequiredError, TickTickRateLimitError } from '../../src/uti
 function makeProps(overrides?: Partial<Props>): Props {
   return {
     userId: 'u1',
-    tickTickAccessToken: 'token-1',
-    tickTickRefreshToken: 'refresh-1',
-    tickTickExpiresAt: new Date(Date.now() + 3600_000).toISOString(),
-    tickTickScope: 'tasks:read tasks:write',
     ...overrides,
   };
+}
+
+function createMockKV(
+  tokens?: { accessToken: string; refreshToken: string; expiresAt: string; scope: string },
+): KVNamespace {
+  const store = new Map<string, string>();
+  if (tokens) {
+    store.set(
+      'ticktick_tokens:u1',
+      JSON.stringify({
+        ...tokens,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  }
+  return {
+    get: async (key: string) => store.get(key) ?? null,
+    put: async (key: string, value: string) => {
+      store.set(key, value);
+    },
+    delete: async (key: string) => {
+      store.delete(key);
+    },
+  } as unknown as KVNamespace;
 }
 
 function makeEnv(overrides?: Partial<Env>): Env {
   return {
     DB: {} as any,
-    OAUTH_KV: {
-      get: async () => null,
-      put: async () => {},
-      delete: async () => {},
-    } as any,
+    OAUTH_KV: createMockKV({
+      accessToken: 'token-1',
+      refreshToken: 'refresh-1',
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      scope: 'tasks:read tasks:write',
+    }),
     COOKIE_ENCRYPTION_KEY: 'test',
     TICKTICK_CLIENT_ID: 'client-id',
     TICKTICK_CLIENT_SECRET: 'client-secret',
@@ -144,5 +165,16 @@ describe('TickTickClient', () => {
     const secondRefreshBody = fetchMock.mock.calls[4][1]?.body as string;
     expect(firstRefreshBody).toContain('refresh_token=refresh-1');
     expect(secondRefreshBody).toContain('refresh_token=refreshed-refresh-1');
+  });
+
+  it('throws TickTickAuthRequiredError when KV has no tokens', async () => {
+    const env = makeEnv({
+      OAUTH_KV: createMockKV(),
+    });
+    const fetchMock = vi.fn();
+    const client = new TickTickClient(env, makeProps(), fetchMock as unknown as typeof fetch);
+
+    await expect(client.listProjects()).rejects.toBeInstanceOf(TickTickAuthRequiredError);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
