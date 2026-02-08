@@ -61,48 +61,6 @@ MCP Client ←(OAuth 2.1)→ tickmcp ←(OAuth 2.0)→ TickTick API
 - **Storage**: D1 (users, audit events, OAuth state) + KV (tokens, idempotency)
 - **Rate limiting**: Per-user via Cloudflare Rate Limiting
 
-## Development
-
-```bash
-npm install
-npm run db:migrate        # local D1 migrations
-npm run dev               # local dev server
-npm run check             # typecheck
-npm run test              # run tests
-```
-
-Secrets setup: `docs/SECRETS_SETUP_FISH.md`
-
-### Deploy
-
-```bash
-npm run deploy              # dev (tickmcp-dev.mrjl.dev)
-npm run deploy:production   # prod (tickmcp.mrjl.dev)
-```
-
-### TickTick OAuth Apps
-
-Create two apps at <https://developer.ticktick.com/manage>:
-
-| Environment | Redirect URI |
-|-------------|-------------|
-| Dev | `https://tickmcp-dev.mrjl.dev/callback` |
-| Production | `https://tickmcp.mrjl.dev/callback` |
-
-Scope: `tasks:read tasks:write`
-
-### Source Layout
-
-```
-src/index.ts                     Worker entrypoint (OAuthProvider + McpAgent)
-src/auth/                        OAuth authorize/callback + TickTick token helpers
-src/ticktick/client.ts           TickTick API client with retry/refresh
-src/mcp/tools/register-tools.ts  MCP tool definitions and handlers
-src/db/                          D1 schema, migrations, repositories
-src/security/idempotency.ts      Idempotency guard
-test/                            Unit and integration tests
-```
-
 ## License
 
 [MIT](LICENSE)
