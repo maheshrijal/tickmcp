@@ -36,7 +36,7 @@ describe('ticktick-upstream helpers', () => {
     // Credentials are sent as body params, not Basic Auth
     const body = (options.body as string);
     expect(body).toContain('client_id=');
-    expect(body).not.toContain('client_secret=');
+    expect(body).toContain('client_secret=');
   });
 
   it('throws on failed code exchange', async () => {
