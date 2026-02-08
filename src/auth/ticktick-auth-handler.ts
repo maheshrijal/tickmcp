@@ -345,67 +345,13 @@ function securityHeaders(contentType: string): Record<string, string> {
   };
 }
 
-function consentPageHtml(scope: string, baseUrl: string, queryString: string): string {
-  const e = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Authorize — tickmcp</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#0d1117;color:#c9d1d9;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:1rem}
-.card{background:#161b22;border:1px solid #30363d;border-radius:12px;max-width:480px;width:100%;padding:2rem}
-h1{color:#f0f6fc;font-size:1.4rem;margin-bottom:.5rem}
-p{margin:.75rem 0;line-height:1.5}
-.label{color:#8b949e;font-size:.85rem}
-.value{color:#c9d1d9;font-size:.9rem;word-break:break-all;background:#0d1117;padding:.4rem .6rem;border-radius:6px;border:1px solid #21262d;display:block;margin-top:.25rem}
-.scope-list{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.25rem}
-.scope-tag{background:#1f6feb22;color:#58a6ff;padding:.2rem .5rem;border-radius:4px;font-size:.8rem;border:1px solid #1f6feb44}
-.actions{display:flex;gap:.75rem;margin-top:1.5rem}
-.btn{padding:.6rem 1.5rem;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;border:none;text-decoration:none;text-align:center}
-.btn-primary{background:#238636;color:#fff}
-.btn-primary:hover{background:#2ea043}
-.btn-cancel{background:#21262d;color:#c9d1d9;border:1px solid #30363d}
-.btn-cancel:hover{background:#30363d}
-.warning{background:#f8514922;border:1px solid #f8514944;border-radius:8px;padding:.75rem;margin-top:1rem;font-size:.85rem;color:#f85149}
-</style>
-</head>
-<body>
-<div class="card">
-<h1>Authorize TickTick Access</h1>
-<p>An application is requesting access to your TickTick account through tickmcp.</p>
-<div style="margin:1rem 0">
-<div class="label">Permissions</div>
-<div class="scope-list">
-${scope.split(' ').map((s) => `<span class="scope-tag">${e(s)}</span>`).join('')}
-</div>
-</div>
-<div class="warning">Only continue if you trust this application. It will be able to read and modify your TickTick tasks.</div>
-<form method="POST" action="${e(baseUrl)}/authorize">
-<input type="hidden" name="query" value="${e(queryString)}">
-<div class="actions">
-<button type="submit" class="btn btn-primary">Continue</button>
-</div>
-</form>
-</div>
-</body>
-</html>`;
-}
-
 export const tickTickAuthHandler: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const baseUrl = getBaseUrl(request, env);
 
-    if (url.pathname === '/authorize') {
-      if (request.method === 'GET') {
-        return handleAuthorizeConsent(request, env, baseUrl);
-      }
-      if (request.method === 'POST') {
-        return handleAuthorizeConfirmed(request, env, baseUrl);
-      }
+    if (request.method === 'GET' && url.pathname === '/authorize') {
+      return handleAuthorize(request, env, baseUrl);
     }
 
     if (request.method === 'GET' && url.pathname === '/callback') {
@@ -437,44 +383,10 @@ export const tickTickAuthHandler: ExportedHandler<Env> = {
   },
 };
 
-async function handleAuthorizeConsent(request: Request, env: Env, baseUrl: string): Promise<Response> {
+async function handleAuthorize(request: Request, env: Env, baseUrl: string): Promise<Response> {
   let mcpOAuthRequest: AuthRequest;
   try {
     mcpOAuthRequest = await env.OAUTH_PROVIDER.parseAuthRequest(request);
-  } catch {
-    return new Response('Invalid OAuth authorization request', { status: 400 });
-  }
-
-  const clientInfo = await env.OAUTH_PROVIDER.lookupClient(mcpOAuthRequest.clientId);
-  if (!clientInfo) {
-    return new Response('Unknown OAuth client', { status: 400 });
-  }
-
-  if (!clientInfo.redirectUris.includes(mcpOAuthRequest.redirectUri)) {
-    return new Response('OAuth redirect_uri is not registered for this client', { status: 400 });
-  }
-
-  const queryString = new URL(request.url).search;
-  const html = consentPageHtml(getScope(env), baseUrl, queryString);
-  return new Response(html, {
-    status: 200,
-    headers: securityHeaders('text/html; charset=utf-8'),
-  });
-}
-
-async function handleAuthorizeConfirmed(request: Request, env: Env, baseUrl: string): Promise<Response> {
-  const formData = await request.formData();
-  const originalQuery = formData.get('query') as string;
-  if (!originalQuery) {
-    return new Response('Missing authorization parameters', { status: 400 });
-  }
-
-  const syntheticUrl = new URL(`${baseUrl}/authorize${originalQuery}`);
-  const syntheticRequest = new Request(syntheticUrl.toString(), { method: 'GET' });
-
-  let mcpOAuthRequest: AuthRequest;
-  try {
-    mcpOAuthRequest = await env.OAUTH_PROVIDER.parseAuthRequest(syntheticRequest);
   } catch {
     return new Response('Invalid OAuth authorization request', { status: 400 });
   }
