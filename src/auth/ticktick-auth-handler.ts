@@ -458,7 +458,7 @@ async function handleCallback(request: Request, env: Env, baseUrl: string): Prom
 
   // Ensure user exists in D1
   const usersRepo = new UsersRepository(env.DB);
-  const user = await usersRepo.ensureBySubject(userInfo.username);
+  const user = await usersRepo.ensureBySubject(userInfo.subject);
 
   // Compute expires_at
   const expiresAt = tokenResponse.expires_in
@@ -487,7 +487,7 @@ async function handleCallback(request: Request, env: Env, baseUrl: string): Prom
   const { redirectTo } = await oauthHelpers.completeAuthorization({
     request: stored.mcpOAuthRequest,
     userId: user.id,
-    metadata: { label: `TickTick (${userInfo.username})` },
+    metadata: { label: `TickTick (${userInfo.displayName ?? userInfo.subject})` },
     scope: stored.mcpOAuthRequest.scope ?? [],
     props,
   });

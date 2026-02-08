@@ -255,7 +255,24 @@ export async function refreshTickTickToken(
 }
 
 export interface TickTickUserInfo {
-  username: string;
+  subject: string;
+  displayName?: string;
+}
+
+function normalizeUserInfoBody(body: Record<string, unknown>): TickTickUserInfo {
+  const username = asString(body.username);
+  const email = asString(body.email);
+  const userId = asString(body.userId) ?? asString(body.user_id) ?? asString(body.uid) ?? asString(body.id);
+
+  const subject = username ?? email ?? userId;
+  if (!subject) {
+    throw new TickTickApiError('TickTick user identity response is missing a usable subject', 502, { body });
+  }
+
+  return {
+    subject,
+    displayName: username ?? email ?? userId,
+  };
 }
 
 export async function getTickTickUserIdentity(
@@ -277,7 +294,8 @@ export async function getTickTickUserIdentity(
       );
 
       if (response.ok) {
-        return (await response.json()) as TickTickUserInfo;
+        const body = (await response.json()) as Record<string, unknown>;
+        return normalizeUserInfoBody(body);
       }
 
       if (shouldRetryStatus(response.status) && attempt < MAX_ATTEMPTS) {
