@@ -47,8 +47,6 @@ ChatGPT — add as remote MCP server URL: `https://tickmcp.mrjl.dev/mcp`
 | `ticktick_complete_task` | Mark a task complete |
 | `ticktick_delete_task` | Delete a task |
 
-Mutating tools require an `idempotencyKey` to safely deduplicate retries.
-
 ## Architecture
 
 ```
