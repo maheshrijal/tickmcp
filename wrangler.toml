@@ -1,0 +1,103 @@
+name = "tickmcp"
+main = "src/index.ts"
+compatibility_date = "2026-02-08"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+preview_urls = false
+routes = [
+  { pattern = "tickmcp-dev.mrjl.dev", custom_domain = true }
+]
+
+[triggers]
+crons = ["0 3 * * *"]
+
+[observability]
+enabled = true
+
+# ===== DEV (default) =====
+[vars]
+PUBLIC_BASE_URL = "https://tickmcp-dev.mrjl.dev"
+TICKTICK_BASE_URL = "https://api.ticktick.com/open/v1"
+TICKTICK_AUTH_URL = "https://ticktick.com/oauth/authorize"
+TICKTICK_TOKEN_URL = "https://ticktick.com/oauth/token"
+TICKTICK_OAUTH_SCOPE = "tasks:read tasks:write"
+
+[durable_objects]
+bindings = [
+  { name = "MCP_OBJECT", class_name = "TickMcpAgent" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TickMcpAgent"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tickmcp-dev"
+database_id = "e270a9b7-6304-410d-a073-fbb66c23def6"
+migrations_dir = "src/db/migrations"
+
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "ed035df85b974bf18abb166f2d7de1fc"
+
+[[ratelimits]]
+name = "MCP_RATE_LIMITER"
+namespace_id = "1001"
+[ratelimits.simple]
+limit = 120
+period = 60
+
+[[ratelimits]]
+name = "AUTH_RATE_LIMITER"
+namespace_id = "1002"
+[ratelimits.simple]
+limit = 30
+period = 60
+
+# ===== PRODUCTION =====
+[env.production]
+workers_dev = false
+routes = [
+  { pattern = "tickmcp.mrjl.dev", custom_domain = true }
+]
+
+[env.production.vars]
+PUBLIC_BASE_URL = "https://tickmcp.mrjl.dev"
+TICKTICK_BASE_URL = "https://api.ticktick.com/open/v1"
+TICKTICK_AUTH_URL = "https://ticktick.com/oauth/authorize"
+TICKTICK_TOKEN_URL = "https://ticktick.com/oauth/token"
+TICKTICK_OAUTH_SCOPE = "tasks:read tasks:write"
+
+[env.production.durable_objects]
+bindings = [
+  { name = "MCP_OBJECT", class_name = "TickMcpAgent" }
+]
+
+[[env.production.migrations]]
+tag = "v1"
+new_sqlite_classes = ["TickMcpAgent"]
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "tickmcp-prod"
+database_id = "a84f61f3-73ea-4c89-a2f3-ce631bc78dbd"
+migrations_dir = "src/db/migrations"
+
+[[env.production.kv_namespaces]]
+binding = "OAUTH_KV"
+id = "9490cd0686d94ba49435e5c3117d3f81"
+
+[[env.production.ratelimits]]
+name = "MCP_RATE_LIMITER"
+namespace_id = "1001"
+[env.production.ratelimits.simple]
+limit = 120
+period = 60
+
+[[env.production.ratelimits]]
+name = "AUTH_RATE_LIMITER"
+namespace_id = "1002"
+[env.production.ratelimits.simple]
+limit = 30
+period = 60
