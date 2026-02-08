@@ -1,0 +1,29 @@
+{
+  "name": "tickmcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:production": "wrangler deploy --env production",
+    "db:migrate": "wrangler d1 migrations apply tickmcp-dev --local",
+    "db:migrate:dev": "wrangler d1 migrations apply tickmcp-dev",
+    "db:migrate:production": "wrangler d1 migrations apply tickmcp-prod --env production",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "^0.2.2",
+    "@modelcontextprotocol/sdk": "1.25.2",
+    "agents": "^0.3.10",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260129.0",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.9",
+    "wrangler": "^4.2.1"
+  }
+}
