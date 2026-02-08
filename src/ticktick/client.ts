@@ -358,7 +358,7 @@ export class TickTickClient {
         return undefined as T;
       }
 
-      const text = await response.text();
+      const text = (await response.text()).trim();
       if (!text) {
         return undefined as T;
       }
