@@ -91,6 +91,6 @@ describe('ticktick-upstream helpers', () => {
     expect(info.username).toBe('testuser123');
 
     const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe('https://api.ticktick.com/open/v1/user');
+    expect(url).toBe('https://api.ticktick.com/open/v1/user/info');
   });
 });

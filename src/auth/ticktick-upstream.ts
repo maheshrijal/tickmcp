@@ -268,7 +268,7 @@ export async function getTickTickUserIdentity(
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
       const response = await fetchWithTimeout(
-        `${baseUrl}/user`,
+        `${baseUrl}/user/info`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },
         },
