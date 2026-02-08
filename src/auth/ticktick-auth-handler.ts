@@ -345,7 +345,7 @@ function securityHeaders(contentType: string): Record<string, string> {
   };
 }
 
-function consentPageHtml(clientId: string, redirectUri: string, scope: string, baseUrl: string, queryString: string): string {
+function consentPageHtml(scope: string, baseUrl: string, queryString: string): string {
   const e = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   return `<!DOCTYPE html>
 <html lang="en">
@@ -376,14 +376,6 @@ p{margin:.75rem 0;line-height:1.5}
 <div class="card">
 <h1>Authorize TickTick Access</h1>
 <p>An application is requesting access to your TickTick account through tickmcp.</p>
-<div style="margin:1rem 0">
-<div class="label">Client ID</div>
-<div class="value">${e(clientId)}</div>
-</div>
-<div style="margin:1rem 0">
-<div class="label">Redirect URI</div>
-<div class="value">${e(redirectUri)}</div>
-</div>
 <div style="margin:1rem 0">
 <div class="label">Permissions</div>
 <div class="scope-list">
@@ -463,7 +455,7 @@ async function handleAuthorizeConsent(request: Request, env: Env, baseUrl: strin
   }
 
   const queryString = new URL(request.url).search;
-  const html = consentPageHtml(mcpOAuthRequest.clientId, mcpOAuthRequest.redirectUri, getScope(env), baseUrl, queryString);
+  const html = consentPageHtml(getScope(env), baseUrl, queryString);
   return new Response(html, {
     status: 200,
     headers: securityHeaders('text/html; charset=utf-8'),
