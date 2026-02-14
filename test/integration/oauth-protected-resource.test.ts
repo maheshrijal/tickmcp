@@ -18,7 +18,7 @@ describe('OAuth protected resource metadata', () => {
       authorization_servers: string[];
       bearer_methods_supported: string[];
     };
-    expect(json.resource).toBe('https://tickmcp-dev.mrjl.dev');
+    expect(json.resource).toBe('https://tickmcp-dev.mrjl.dev/mcp');
     expect(json.authorization_servers).toEqual(['https://tickmcp-dev.mrjl.dev']);
     expect(json.bearer_methods_supported).toContain('header');
   });
@@ -30,6 +30,6 @@ describe('OAuth protected resource metadata', () => {
 
     expect(response.status).toBe(200);
     const json = (await response.json()) as { resource: string };
-    expect(json.resource).toBe('https://tickmcp-dev.mrjl.dev');
+    expect(json.resource).toBe('https://tickmcp-dev.mrjl.dev/mcp');
   });
 });

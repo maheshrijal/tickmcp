@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --env=\"\"",
+    "deploy:dev": "wrangler deploy --env=\"\"",
     "deploy:production": "wrangler deploy --env production",
     "db:migrate": "wrangler d1 migrations apply tickmcp-dev --local",
-    "db:migrate:dev": "wrangler d1 migrations apply tickmcp-dev",
+    "db:migrate:dev": "wrangler d1 migrations apply tickmcp-dev --env=\"\"",
     "db:migrate:production": "wrangler d1 migrations apply tickmcp-prod --env production",
     "check": "tsc --noEmit",
     "test": "vitest run",
