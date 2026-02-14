@@ -2,6 +2,7 @@ import OAuthProvider from '@cloudflare/workers-oauth-provider';
 import { McpAgent } from 'agents/mcp';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Props } from './auth/props';
+import { tokenExchangeCallback, withOAuthChallengeMetadata } from './auth/oauth-metadata';
 import { tickTickAuthHandler } from './auth/ticktick-auth-handler';
 import { AuditEventsRepository, OAuthStatesRepository } from './db/repositories';
 import { Env } from './types/env';
@@ -9,6 +10,21 @@ import { registerTickTickTools } from './mcp/tools/register-tools';
 
 const AUDIT_RETENTION_DAYS = 90;
 const IDEMPOTENCY_CLEANUP_SECONDS = 10 * 60;
+const MCP_ROUTE = '/mcp';
+
+function summarizeAuthHeader(authHeader: string | null): Record<string, unknown> {
+  if (!authHeader) {
+    return { present: false };
+  }
+  const isBearer = authHeader.startsWith('Bearer ');
+  const token = isBearer ? authHeader.slice('Bearer '.length) : authHeader;
+  return {
+    present: true,
+    bearer: isBearer,
+    tokenLength: token.length,
+    tokenPrefix: token.slice(0, 8),
+  };
+}
 
 export class TickMcpAgent extends McpAgent<Env, unknown, Props> {
   server = new McpServer({
@@ -25,17 +41,13 @@ export class TickMcpAgent extends McpAgent<Env, unknown, Props> {
 }
 
 const provider = new OAuthProvider({
-  apiRoute: '/mcp',
-  apiHandler: TickMcpAgent.serve('/mcp'),
+  apiRoute: MCP_ROUTE,
+  apiHandler: TickMcpAgent.serve(MCP_ROUTE),
   defaultHandler: tickTickAuthHandler as ExportedHandler,
   authorizeEndpoint: '/authorize',
   tokenEndpoint: '/token',
   clientRegistrationEndpoint: '/register',
-  tokenExchangeCallback: async ({ props }) => {
-    // Return the props unchanged - they're already correctly set during authorization
-    // This ensures props are properly passed through to the MCP agent
-    return { accessTokenProps: props };
-  },
+  tokenExchangeCallback,
 });
 
 export default {
@@ -54,7 +66,39 @@ export default {
       }
     }
 
-    return provider.fetch(request, env, ctx);
+    const response = await provider.fetch(request, env, ctx);
+
+    if (url.pathname === '/token' && response.ok) {
+      const cloned = response.clone();
+      try {
+        const body = await cloned.json() as Record<string, unknown>;
+        if (typeof body.token_type === 'string') {
+          body.token_type = 'Bearer';
+        }
+        return new Response(JSON.stringify(body), {
+          status: response.status,
+          headers: {
+            'content-type': 'application/json',
+            'cache-control': 'no-store',
+          },
+        });
+      } catch {
+        return response;
+      }
+    }
+
+    if (url.pathname.startsWith(MCP_ROUTE)) {
+      if (response.status === 401) {
+        console.warn('MCP 401 response', {
+          path: url.pathname,
+          method: request.method,
+          authHeader: summarizeAuthHeader(request.headers.get('authorization')),
+          userAgent: request.headers.get('user-agent') ?? 'unknown',
+        });
+      }
+      return withOAuthChallengeMetadata(response, request, env);
+    }
+    return response;
   },
 
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
