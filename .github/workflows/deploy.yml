@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build homepage
+        run: npm run build:homepage
+
       - name: Type check
         run: npm run check
 
@@ -69,6 +72,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Build homepage
+        run: npm run build:homepage
 
       - name: Type check
         run: npm run check
