@@ -223,4 +223,77 @@ describe('MCP tools end-to-end (mocked TickTick upstream)', () => {
     );
     expect(thisWeekTasks).toEqual(['today', 'plus1', 'plus6']);
   });
+
+  it('normalizes create/update date inputs to TickTick +0000 format', async () => {
+    const { env } = createTestEnv();
+    const props = { userId: 'u-e2e-dates' };
+    await env.OAUTH_KV.put(`ticktick_tokens:${props.userId}`, JSON.stringify(taskTokenPayload()));
+
+    const seenBodies: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      const url = new URL(typeof input === 'string' ? input : input.toString());
+      const path = url.pathname;
+
+      if (path === '/open/v1/task' && method === 'POST') {
+        const body = JSON.parse((init?.body as string) ?? '{}') as Record<string, unknown>;
+        seenBodies.push(body);
+        return new Response(
+          JSON.stringify({
+            id: 't-date',
+            projectId: 'p1',
+            title: String(body.title),
+            status: 0,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+
+      if (path === '/open/v1/task/t-date' && method === 'POST') {
+        const body = JSON.parse((init?.body as string) ?? '{}') as Record<string, unknown>;
+        seenBodies.push(body);
+        return new Response(
+          JSON.stringify({
+            id: 't-date',
+            projectId: 'p1',
+            title: String(body.title ?? 'updated'),
+            status: 0,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+
+      throw new Error(`Unhandled mocked request: ${method} ${path}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerTickTickTools(server, env, props);
+    const tools = getToolHandlers(server);
+
+    const createResult = await tools.ticktick_create_task({
+      idempotencyKey: 'e2e-date-create',
+      projectId: 'p1',
+      title: 'date create',
+      startDate: '2026-02-08T10:30:00-05:00',
+      dueDate: '2026-02-08T11:30:00-05:00',
+    });
+    assertToolOk(createResult, 'create_with_dates');
+
+    const updateResult = await tools.ticktick_update_task({
+      idempotencyKey: 'e2e-date-update',
+      projectId: 'p1',
+      taskId: 't-date',
+      title: 'date update',
+      startDate: '2026-03-01T09:00:00Z',
+      dueDate: '2026-03-01T12:00:00Z',
+    });
+    assertToolOk(updateResult, 'update_with_dates');
+
+    expect(seenBodies).toHaveLength(2);
+    expect(seenBodies[0].startDate).toBe('2026-02-08T15:30:00.000+0000');
+    expect(seenBodies[0].dueDate).toBe('2026-02-08T16:30:00.000+0000');
+    expect(seenBodies[1].startDate).toBe('2026-03-01T09:00:00.000+0000');
+    expect(seenBodies[1].dueDate).toBe('2026-03-01T12:00:00.000+0000');
+  });
 });

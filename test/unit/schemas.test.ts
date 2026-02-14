@@ -30,4 +30,8 @@ describe('tool schemas', () => {
   it('normalizes valid dates to TickTick UTC offset format', () => {
     expect(normalizeDateInput('2026-02-08T10:30:00Z')).toBe('2026-02-08T10:30:00.000+0000');
   });
+
+  it('normalizes non-UTC offsets to TickTick UTC offset format', () => {
+    expect(normalizeDateInput('2026-02-08T10:30:00-05:00')).toBe('2026-02-08T15:30:00.000+0000');
+  });
 });
