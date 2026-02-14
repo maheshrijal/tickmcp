@@ -258,7 +258,7 @@ describe('TickTickClient', () => {
     expect(task.id).toBe('task-6001');
   });
 
-  it('reuses cached active task ids across consecutive active getTask calls', async () => {
+  it('revalidates cached active task ids before returning active getTask results', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -293,14 +293,23 @@ describe('TickTickClient', () => {
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            tasks: [{ id: 't1', projectId: 'p1', title: 'Task 1', status: 0 }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
       );
 
     const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
-    await client.getTask('p1', 't1');
-    await client.getTask('p1', 't2');
+    await client.getTask('p1', 't1'); // prime cache
+    await expect(client.getTask('p1', 't2')).rejects.toBeInstanceOf(TaskNotFoundError);
 
-    // get_task endpoint called twice, project data called once (cache hit on second getTask)
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // call 1: get_task + project data
+    // call 2: get_task + forced project data refresh due to cache hit
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it('dueFilter today includes only today and excludes overdue', async () => {

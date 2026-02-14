@@ -441,7 +441,9 @@ export class TickTickClient {
     // active tasks must still exist in the project's active task set.
     if (typeof task.status !== 'number' || task.status === 0) {
       let { ids, fromCache } = await this.getActiveTaskIds(projectId);
-      if (!ids.has(taskId) && fromCache) {
+      if (fromCache) {
+        // Always revalidate cached membership before accepting active-task reads.
+        // This avoids returning tasks deleted outside this client during cache TTL.
         ({ ids } = await this.getActiveTaskIds(projectId, true));
       }
       if (!ids.has(taskId)) {
