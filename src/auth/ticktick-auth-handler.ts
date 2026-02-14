@@ -421,15 +421,6 @@ async function handleAuthorize(request: Request, env: Env, baseUrl: string): Pro
     return new Response('Invalid OAuth authorization request', { status: 400 });
   }
 
-  console.log('handleAuthorize: parsed AuthRequest', {
-    clientId: mcpOAuthRequest.clientId,
-    redirectUri: mcpOAuthRequest.redirectUri,
-    resource: mcpOAuthRequest.resource,
-    scope: mcpOAuthRequest.scope,
-    responseType: mcpOAuthRequest.responseType,
-    fullUrl: request.url,
-  });
-
   const clientInfo = await env.OAUTH_PROVIDER.lookupClient(mcpOAuthRequest.clientId);
   if (!clientInfo) {
     return new Response('Unknown OAuth client', { status: 400 });
@@ -523,11 +514,6 @@ async function handleCallback(request: Request, env: Env, baseUrl: string): Prom
 
     // Complete the MCP OAuth authorization — this generates an authorization code
     // and redirects the user back to the MCP client
-    console.log('handleCallback: completing authorization', {
-      storedResource: stored.mcpOAuthRequest.resource,
-      storedScope: stored.mcpOAuthRequest.scope,
-      storedClientId: stored.mcpOAuthRequest.clientId,
-    });
     const oauthHelpers: OAuthHelpers = env.OAUTH_PROVIDER;
     const { redirectTo } = await oauthHelpers.completeAuthorization({
       request: stored.mcpOAuthRequest,
@@ -542,6 +528,6 @@ async function handleCallback(request: Request, env: Env, baseUrl: string): Prom
     const message = err instanceof Error ? err.message : String(err);
     const details = err instanceof Error ? err.stack : undefined;
     console.error('OAuth callback failed', { error: message, stack: details });
-    return new Response(`Authorization failed: ${message}`, { status: 502 });
+    return new Response('Authorization failed', { status: 502 });
   }
 }

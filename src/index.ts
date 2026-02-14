@@ -17,12 +17,9 @@ function summarizeAuthHeader(authHeader: string | null): Record<string, unknown>
     return { present: false };
   }
   const isBearer = authHeader.startsWith('Bearer ');
-  const token = isBearer ? authHeader.slice('Bearer '.length) : authHeader;
   return {
     present: true,
     bearer: isBearer,
-    tokenLength: token.length,
-    tokenPrefix: token.slice(0, 8),
   };
 }
 

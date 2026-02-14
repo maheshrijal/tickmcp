@@ -267,8 +267,6 @@ function normalizeUserInfoBody(body: Record<string, unknown>): TickTickUserInfo 
   const userId =
     asString(body.userId) ?? asString(body.user_id) ?? asString(body.uid) ?? asString(body.id);
 
-  console.log('TickTick user info response', JSON.stringify(body));
-
   const subject = username ?? email ?? profileId ?? userId ?? inboxId;
   if (!subject) {
     throw new TickTickApiError('TickTick user identity response is missing a usable subject', 502, { body });

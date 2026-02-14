@@ -39,13 +39,6 @@ export function tokenExchangeCallback({
   grantType?: string;
   clientId?: string;
 }): { accessTokenProps: Props; newProps: Props } {
-  console.log('tokenExchangeCallback invoked', {
-    grantType: grantType ?? 'unknown',
-    clientId: clientId ?? 'unknown',
-    hasProps: Boolean(props),
-    hasUserIdInProps: Boolean(props?.userId),
-    callbackUserIdPresent: Boolean(userId),
-  });
   const resolvedProps = props?.userId ? props : { userId };
   // Keep both token props and grant props aligned so refreshed tokens retain required auth props.
   return { accessTokenProps: resolvedProps, newProps: resolvedProps };
