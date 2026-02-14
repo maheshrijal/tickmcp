@@ -259,6 +259,9 @@ p code,li code{
   padding-bottom:.4rem;
   border-bottom:1px solid var(--border);
 }
+.tool-group--spaced{
+  margin-top:1.25rem;
+}
 
 .tool-list{list-style:none;padding:0}
 .tool-list li{

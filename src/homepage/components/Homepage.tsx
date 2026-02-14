@@ -22,6 +22,11 @@ export function Homepage() {
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
           rel="stylesheet"
         />
+        {/*
+          homepageStyles is a static CSS string imported from '../styles' and does not
+          contain any user input. Using dangerouslySetInnerHTML here is safe in this
+          specific case, but this pattern must not be used with untrusted content.
+        */}
         <style dangerouslySetInnerHTML={{ __html: homepageStyles }} />
       </head>
       <body>

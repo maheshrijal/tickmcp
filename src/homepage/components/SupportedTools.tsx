@@ -16,7 +16,7 @@ export function SupportedTools() {
             </ul>
           </div>
 
-          <div className="tool-group" style={{ marginTop: '1.25rem' }}>
+          <div className="tool-group tool-group--spaced">
             <h3>Projects</h3>
             <ul className="tool-list">
               <li>

@@ -66,7 +66,8 @@ function homepageHtml(baseUrl: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
   return HOMEPAGE_HTML_TEMPLATE.replaceAll('__BASE_URL__', safeBase);
 }
 
