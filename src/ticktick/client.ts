@@ -43,6 +43,7 @@ const MAX_BACKOFF_RETRIES = 3;
 const BACKOFF_BASE_MS = 150;
 const REQUEST_TIMEOUT_MS = 8_000;
 const TOKEN_KV_TTL_SECONDS = 60 * 60 * 24 * 30;
+const ACTIVE_TASK_IDS_CACHE_TTL_MS = 5_000;
 
 interface PersistedTokens {
   accessToken: string;
@@ -139,6 +140,7 @@ export class TickTickClient {
   private tokenExpiresAt: string | null = null;
   private tokenScope: string = '';
   private hydratedFromKv = false;
+  private readonly activeTaskIdsCache = new Map<string, { ids: Set<string>; expiresAt: number }>();
 
   constructor(
     private readonly env: Env,
@@ -369,6 +371,27 @@ export class TickTickClient {
     throw new TickTickApiError('TickTick API request retries exhausted', 502);
   }
 
+  private invalidateActiveTaskCache(projectId: string): void {
+    this.activeTaskIdsCache.delete(projectId);
+  }
+
+  private async getActiveTaskIds(projectId: string, forceRefresh = false): Promise<{ ids: Set<string>; fromCache: boolean }> {
+    const cached = this.activeTaskIdsCache.get(projectId);
+    const now = Date.now();
+    if (!forceRefresh && cached && cached.expiresAt > now) {
+      return { ids: cached.ids, fromCache: true };
+    }
+
+    const projectData = await this.callApi<TickTickProjectDataResponse>({ path: `/project/${projectId}/data` });
+    const ids = new Set(
+      (projectData.tasks ?? [])
+        .filter((candidate) => typeof candidate.status !== 'number' || candidate.status === 0)
+        .map((candidate) => candidate.id),
+    );
+    this.activeTaskIdsCache.set(projectId, { ids, expiresAt: now + ACTIVE_TASK_IDS_CACHE_TTL_MS });
+    return { ids, fromCache: false };
+  }
+
   async listProjects(): Promise<TickTickProject[]> {
     return this.callApi<TickTickProject[]>({ path: '/project' });
   }
@@ -417,9 +440,11 @@ export class TickTickClient {
     // TickTick can sometimes resolve deleted task IDs here. Enforce MCP contract:
     // active tasks must still exist in the project's active task set.
     if (typeof task.status !== 'number' || task.status === 0) {
-      const projectData = await this.callApi<TickTickProjectDataResponse>({ path: `/project/${projectId}/data` });
-      const activeTasks = (projectData.tasks ?? []).filter((candidate) => typeof candidate.status !== 'number' || candidate.status === 0);
-      if (!activeTasks.some((candidate) => candidate.id === taskId)) {
+      let { ids, fromCache } = await this.getActiveTaskIds(projectId);
+      if (!ids.has(taskId) && fromCache) {
+        ({ ids } = await this.getActiveTaskIds(projectId, true));
+      }
+      if (!ids.has(taskId)) {
         throw new TaskNotFoundError();
       }
     }
@@ -428,7 +453,7 @@ export class TickTickClient {
   }
 
   async createTask(input: CreateTaskInput): Promise<TickTickTask> {
-    return this.callApi<TickTickTask>({
+    const task = await this.callApi<TickTickTask>({
       path: '/task',
       method: 'POST',
       body: {
@@ -440,10 +465,12 @@ export class TickTickClient {
         priority: input.priority,
       },
     });
+    this.invalidateActiveTaskCache(input.projectId);
+    return task;
   }
 
   async updateTask(input: UpdateTaskInput): Promise<TickTickTask> {
-    return this.callApi<TickTickTask>({
+    const task = await this.callApi<TickTickTask>({
       path: `/task/${input.taskId}`,
       method: 'POST',
       body: {
@@ -455,6 +482,8 @@ export class TickTickClient {
         priority: input.priority,
       },
     });
+    this.invalidateActiveTaskCache(input.projectId);
+    return task;
   }
 
   async completeTask(projectId: string, taskId: string): Promise<void> {
@@ -462,6 +491,7 @@ export class TickTickClient {
       path: `/project/${projectId}/task/${taskId}/complete`,
       method: 'POST',
     });
+    this.invalidateActiveTaskCache(projectId);
   }
 
   async deleteTask(projectId: string, taskId: string): Promise<void> {
@@ -469,5 +499,6 @@ export class TickTickClient {
       path: `/project/${projectId}/task/${taskId}`,
       method: 'DELETE',
     });
+    this.invalidateActiveTaskCache(projectId);
   }
 }

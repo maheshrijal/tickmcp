@@ -258,6 +258,51 @@ describe('TickTickClient', () => {
     expect(task.id).toBe('task-6001');
   });
 
+  it('reuses cached active task ids across consecutive active getTask calls', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 't1',
+            projectId: 'p1',
+            title: 'Task 1',
+            status: 0,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            tasks: [
+              { id: 't1', projectId: 'p1', title: 'Task 1', status: 0 },
+              { id: 't2', projectId: 'p1', title: 'Task 2', status: 0 },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 't2',
+            projectId: 'p1',
+            title: 'Task 2',
+            status: 0,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    await client.getTask('p1', 't1');
+    await client.getTask('p1', 't2');
+
+    // get_task endpoint called twice, project data called once (cache hit on second getTask)
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it('dueFilter today includes only today and excludes overdue', async () => {
     const now = new Date();
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
@@ -288,7 +333,7 @@ describe('TickTickClient', () => {
     expect(result.tasks.map((task) => task.id)).toEqual(['today']);
   });
 
-  it('dueFilter this_week excludes overdue and includes next six days only', async () => {
+  it('dueFilter this_week excludes overdue and includes today plus next six days', async () => {
     const now = new Date();
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
     const addDays = (days: number) => {
