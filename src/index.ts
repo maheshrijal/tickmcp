@@ -31,6 +31,11 @@ const provider = new OAuthProvider({
   authorizeEndpoint: '/authorize',
   tokenEndpoint: '/token',
   clientRegistrationEndpoint: '/register',
+  tokenExchangeCallback: async ({ props }) => {
+    // Return the props unchanged - they're already correctly set during authorization
+    // This ensures props are properly passed through to the MCP agent
+    return { accessTokenProps: props };
+  },
 });
 
 export default {
