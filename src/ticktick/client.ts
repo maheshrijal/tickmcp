@@ -166,14 +166,33 @@ export class TickTickClient {
   }
 
   private async markTaskDeleted(projectId: string, taskId: string): Promise<void> {
-    await this.env.OAUTH_KV.put(this.deletedTaskKvKey(projectId, taskId), '1', {
-      expirationTtl: DELETED_TASK_TOMBSTONE_TTL_SECONDS,
-    });
+    try {
+      await this.env.OAUTH_KV.put(this.deletedTaskKvKey(projectId, taskId), '1', {
+        expirationTtl: DELETED_TASK_TOMBSTONE_TTL_SECONDS,
+      });
+    } catch (error) {
+      console.warn('Failed to persist deleted-task tombstone', {
+        userId: this.props.userId,
+        projectId,
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private async isTaskTombstoned(projectId: string, taskId: string): Promise<boolean> {
-    const marker = await this.env.OAUTH_KV.get(this.deletedTaskKvKey(projectId, taskId));
-    return marker === '1';
+    try {
+      const marker = await this.env.OAUTH_KV.get(this.deletedTaskKvKey(projectId, taskId));
+      return marker === '1';
+    } catch (error) {
+      console.warn('Failed to read deleted-task tombstone', {
+        userId: this.props.userId,
+        projectId,
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
   }
 
   private async fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {

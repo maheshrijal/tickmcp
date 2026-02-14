@@ -325,6 +325,77 @@ describe('TickTickClient', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('does not fail deleteTask when tombstone KV write fails after upstream delete', async () => {
+    const tokenPayload = JSON.stringify({
+      accessToken: 'token-1',
+      refreshToken: 'refresh-1',
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      scope: 'tasks:read tasks:write',
+      updatedAt: new Date().toISOString(),
+    });
+    const kv = {
+      get: async (key: string) => (key === 'ticktick_tokens:u1' ? tokenPayload : null),
+      put: async (key: string) => {
+        if (key.startsWith('ticktick_deleted_task:')) {
+          throw new Error('KV unavailable');
+        }
+      },
+      delete: async () => {},
+    } as unknown as KVNamespace;
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = new TickTickClient(makeEnv({ OAUTH_KV: kv }), makeProps(), fetchMock as unknown as typeof fetch);
+
+    await expect(client.deleteTask('p1', 't1')).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fail getTask when tombstone KV read fails', async () => {
+    const tokenPayload = JSON.stringify({
+      accessToken: 'token-1',
+      refreshToken: 'refresh-1',
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      scope: 'tasks:read tasks:write',
+      updatedAt: new Date().toISOString(),
+    });
+    const kv = {
+      get: async (key: string) => {
+        if (key.startsWith('ticktick_deleted_task:')) {
+          throw new Error('KV timeout');
+        }
+        return key === 'ticktick_tokens:u1' ? tokenPayload : null;
+      },
+      put: async () => {},
+      delete: async () => {},
+    } as unknown as KVNamespace;
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 't1',
+            projectId: 'p1',
+            title: 'task',
+            status: 0,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            tasks: [{ id: 't1', projectId: 'p1', title: 'task', status: 0 }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+
+    const client = new TickTickClient(makeEnv({ OAUTH_KV: kv }), makeProps(), fetchMock as unknown as typeof fetch);
+    await expect(client.getTask('p1', 't1')).resolves.toMatchObject({ id: 't1' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('dueFilter today includes only today and excludes overdue', async () => {
     const now = new Date();
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
