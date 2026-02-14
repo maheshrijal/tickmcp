@@ -43,12 +43,6 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Apply D1 migrations (dev)
-        run: npm run db:migrate:dev
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
       - name: Deploy to Cloudflare (dev)
         run: npm run deploy:dev
         env:
