@@ -224,6 +224,40 @@ describe('TickTickClient', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('does not misclassify active task as missing when project has more than 5000 active tasks', async () => {
+    const activeTasks = Array.from({ length: 6001 }, (_, i) => ({
+      id: `task-${i + 1}`,
+      projectId: 'p1',
+      title: `Task ${i + 1}`,
+      status: 0,
+    }));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'task-6001',
+            projectId: 'p1',
+            title: 'Task 6001',
+            status: 0,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ tasks: activeTasks }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    const task = await client.getTask('p1', 'task-6001');
+
+    expect(task.id).toBe('task-6001');
+  });
+
   it('dueFilter today includes only today and excludes overdue', async () => {
     const now = new Date();
     const fmt = (d: Date) => d.toISOString().slice(0, 10);

@@ -417,8 +417,9 @@ export class TickTickClient {
     // TickTick can sometimes resolve deleted task IDs here. Enforce MCP contract:
     // active tasks must still exist in the project's active task set.
     if (typeof task.status !== 'number' || task.status === 0) {
-      const { tasks } = await this.listTasks({ projectId, status: 0, limit: 5000, offset: 0 });
-      if (!tasks.some((candidate) => candidate.id === taskId)) {
+      const projectData = await this.callApi<TickTickProjectDataResponse>({ path: `/project/${projectId}/data` });
+      const activeTasks = (projectData.tasks ?? []).filter((candidate) => typeof candidate.status !== 'number' || candidate.status === 0);
+      if (!activeTasks.some((candidate) => candidate.id === taskId)) {
         throw new TaskNotFoundError();
       }
     }
