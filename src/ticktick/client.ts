@@ -1,7 +1,7 @@
 import { Props } from '../auth/props';
 import { refreshTickTickToken } from '../auth/ticktick-upstream';
 import { Env } from '../types/env';
-import { TickTickProject, TickTickTask } from '../types/models';
+import { TickTickChecklistItem, TickTickProject, TickTickTask } from '../types/models';
 import { TaskNotFoundError, TickTickApiError, TickTickAuthRequiredError, TickTickRateLimitError } from '../utils/errors';
 
 export type TaskDueFilter = 'today' | 'tomorrow' | 'overdue' | 'this_week';
@@ -18,6 +18,8 @@ export interface CreateTaskInput {
   projectId: string;
   title: string;
   content?: string;
+  items?: TickTickChecklistItem[];
+  repeat?: string;
   startDate?: string;
   dueDate?: string;
   priority?: 0 | 1 | 3 | 5;
@@ -28,9 +30,24 @@ export interface UpdateTaskInput {
   taskId: string;
   title?: string;
   content?: string;
+  items?: TickTickChecklistItem[];
+  repeat?: string;
   startDate?: string;
   dueDate?: string;
   priority?: 0 | 1 | 3 | 5;
+}
+
+export interface CreateProjectInput {
+  name: string;
+  color?: string;
+  viewMode?: string;
+}
+
+export interface UpdateProjectInput {
+  projectId: string;
+  name?: string;
+  color?: string;
+  viewMode?: string;
 }
 
 interface TickTickProjectDataResponse {
@@ -435,6 +452,30 @@ export class TickTickClient {
     return this.callApi<TickTickProject>({ path: `/project/${projectId}` });
   }
 
+  async createProject(input: CreateProjectInput): Promise<TickTickProject> {
+    return this.callApi<TickTickProject>({
+      path: '/project',
+      method: 'POST',
+      body: {
+        name: input.name,
+        color: input.color,
+        viewMode: input.viewMode,
+      },
+    });
+  }
+
+  async updateProject(input: UpdateProjectInput): Promise<TickTickProject> {
+    return this.callApi<TickTickProject>({
+      path: `/project/${input.projectId}`,
+      method: 'POST',
+      body: {
+        name: input.name,
+        color: input.color,
+        viewMode: input.viewMode,
+      },
+    });
+  }
+
   async listTasks(input: ListTasksInput): Promise<{ tasks: TickTickTask[]; total: number }> {
     const collectFromProject = async (projectId: string): Promise<TickTickTask[]> => {
       const data = await this.callApi<TickTickProjectDataResponse>({ path: `/project/${projectId}/data` });
@@ -501,6 +542,8 @@ export class TickTickClient {
         projectId: input.projectId,
         title: input.title,
         content: input.content,
+        items: input.items,
+        repeat: input.repeat,
         startDate: input.startDate,
         dueDate: input.dueDate,
         priority: input.priority,
@@ -518,6 +561,8 @@ export class TickTickClient {
         projectId: input.projectId,
         title: input.title,
         content: input.content,
+        items: input.items,
+        repeat: input.repeat,
         startDate: input.startDate,
         dueDate: input.dueDate,
         priority: input.priority,

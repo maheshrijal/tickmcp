@@ -18,6 +18,21 @@ const tickTickTaskSchema = z.object({
   title: z.string(),
   content: z.string().optional(),
   desc: z.string().optional(),
+  items: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        title: z.string(),
+        status: z.number().optional(),
+        completedTime: z.string().optional(),
+        isAllDay: z.boolean().optional(),
+        startDate: z.string().optional(),
+        dueDate: z.string().optional(),
+        timeZone: z.string().optional(),
+      }),
+    )
+    .optional(),
+  repeat: z.string().optional(),
   dueDate: z.string().optional(),
   startDate: z.string().optional(),
   status: z.number().optional(),
@@ -46,6 +61,11 @@ export const listProjectsOutputSchema = {
 };
 
 export const getProjectOutputSchema = {
+  ok: z.boolean(),
+  project: tickTickProjectSchema,
+};
+
+export const mutateProjectOutputSchema = {
   ok: z.boolean(),
   project: tickTickProjectSchema,
 };

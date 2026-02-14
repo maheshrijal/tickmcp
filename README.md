@@ -40,10 +40,12 @@ ChatGPT — add as remote MCP server URL: `https://tickmcp.mrjl.dev/mcp`
 | `ticktick_auth_status` | Check TickTick connection status |
 | `ticktick_list_projects` | List all projects |
 | `ticktick_get_project` | Get a project by ID |
+| `ticktick_create_project` | Create a project |
+| `ticktick_update_project` | Update a project |
 | `ticktick_list_tasks` | List tasks with filters (project, status, due date) and pagination |
 | `ticktick_get_task` | Get a task by ID |
-| `ticktick_create_task` | Create a task |
-| `ticktick_update_task` | Update a task |
+| `ticktick_create_task` | Create a task (supports recurrence and checklist items) |
+| `ticktick_update_task` | Update a task (supports recurrence and checklist items) |
 | `ticktick_complete_task` | Mark a task complete |
 | `ticktick_delete_task` | Delete a task |
 

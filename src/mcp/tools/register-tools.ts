@@ -9,12 +9,14 @@ import { AppError } from '../../utils/errors';
 import {
   completeTaskSchema,
   createTaskSchema,
+  createProjectSchema,
   deleteTaskSchema,
   getTaskSchema,
   idempotencyKeySchema,
   listTasksSchema,
   normalizeDateInput,
   projectIdSchema,
+  updateProjectSchema,
   updateTaskSchema,
 } from './schemas';
 import {
@@ -23,6 +25,7 @@ import {
   getTaskOutputSchema,
   listProjectsOutputSchema,
   listTasksOutputSchema,
+  mutateProjectOutputSchema,
   mutateTaskOutputSchema,
   taskRefOutputSchema,
 } from './output-schemas';
@@ -195,6 +198,108 @@ Errors:
   );
 
   server.registerTool(
+    'ticktick_create_project',
+    {
+      title: 'Create TickTick Project',
+      description: `Create a new TickTick project (list).
+
+Args:
+  - idempotencyKey: Required unique key for safely deduplicating retries
+  - name: Project name (required)
+  - color: Optional project color
+  - viewMode: Optional project view mode
+
+Returns: { ok, project }
+
+Use when: "Create a Work project" -> name="Work"
+Use when: "Create a Personal project in kanban view" -> name="Personal", viewMode="kanban"
+
+Errors:
+  - TICKTICK_AUTH_REQUIRED: User needs to re-authorize TickTick
+  - VALIDATION_ERROR: Invalid input parameters`,
+      inputSchema: {
+        idempotencyKey: idempotencyKeySchema,
+        name: z.string().trim().min(1).max(512).describe('Project name'),
+        color: z.string().trim().min(1).max(64).describe('Project color').optional(),
+        viewMode: z.string().trim().min(1).max(64).describe('Project view mode').optional(),
+      },
+      outputSchema: mutateProjectOutputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (input) => {
+      try {
+        await enforceRateLimit(env, props.userId);
+        return await withAudit(auditRepo, props.userId, 'ticktick_create_project', async () => {
+          const parsed = createProjectSchema.parse(input);
+          await guardIdempotency(env, props.userId, 'ticktick_create_project', parsed.idempotencyKey);
+          const { idempotencyKey: _idempotencyKey, ...projectInput } = parsed;
+          const project = await client.createProject(projectInput);
+          return toolSuccess({ project }, `Created project ${project.id}`);
+        });
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    'ticktick_update_project',
+    {
+      title: 'Update TickTick Project',
+      description: `Update an existing TickTick project.
+
+Args:
+  - idempotencyKey: Required unique key for safely deduplicating retries
+  - projectId: The project to update
+  - name: Optional new project name
+  - color: Optional project color
+  - viewMode: Optional project view mode
+
+Returns: { ok, project }
+
+Use when: "Rename Work to Work 2026" -> projectId="<id>", name="Work 2026"
+Use when: "Change project view mode" -> projectId="<id>", viewMode="kanban"
+
+Errors:
+  - TICKTICK_AUTH_REQUIRED: User needs to re-authorize TickTick
+  - VALIDATION_ERROR: Invalid input parameters`,
+      inputSchema: {
+        idempotencyKey: idempotencyKeySchema,
+        projectId: z.string().min(1).describe('TickTick project ID'),
+        name: z.string().trim().min(1).max(512).describe('Project name').optional(),
+        color: z.string().trim().min(1).max(64).describe('Project color').optional(),
+        viewMode: z.string().trim().min(1).max(64).describe('Project view mode').optional(),
+      },
+      outputSchema: mutateProjectOutputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async (input) => {
+      try {
+        await enforceRateLimit(env, props.userId);
+        return await withAudit(auditRepo, props.userId, 'ticktick_update_project', async () => {
+          const parsed = updateProjectSchema.parse(input);
+          await guardIdempotency(env, props.userId, 'ticktick_update_project', parsed.idempotencyKey);
+          const { idempotencyKey: _idempotencyKey, ...projectInput } = parsed;
+          const project = await client.updateProject(projectInput);
+          return toolSuccess({ project }, `Updated project ${project.id}`);
+        });
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
     'ticktick_list_tasks',
     {
       title: 'List TickTick Tasks',
@@ -323,6 +428,8 @@ Args:
   - projectId: The project to create the task in (use ticktick_list_projects to find IDs)
   - title: Task title (required)
   - content: Optional markdown body/notes
+  - items: Optional checklist/subtask items [{ title, status? }]
+  - repeat: Optional recurring rule in RRULE format (must start with "RRULE:")
   - startDate: Optional ISO 8601 date (e.g. "2025-03-15" or "2025-03-15T09:00:00Z")
   - dueDate: Optional ISO 8601 due date
   - priority: 0 (none), 1 (low), 3 (medium), 5 (high)
@@ -340,6 +447,24 @@ Errors:
         projectId: z.string().min(1).describe('TickTick project ID'),
         title: z.string().min(1).describe('Task title'),
         content: z.string().describe('Task body/notes in markdown').optional(),
+        items: z
+          .array(
+            z.object({
+              title: z.string().trim().min(1).describe('Checklist item title'),
+              status: z.union([z.literal(0), z.literal(1)]).describe('Checklist item status (0=active, 1=completed)').optional(),
+            }),
+          )
+          .max(500)
+          .describe('Checklist/subtask items')
+          .optional(),
+        repeat: z
+          .string()
+          .trim()
+          .min(1)
+          .max(512)
+          .refine((value) => value.startsWith('RRULE:'), { message: 'repeat must start with RRULE:' })
+          .describe('Recurring rule in RRULE format')
+          .optional(),
         startDate: z.string().describe('Start date in ISO 8601 format').optional(),
         dueDate: z.string().describe('Due date in ISO 8601 format').optional(),
         priority: z
@@ -387,6 +512,8 @@ Args:
   - taskId: The task to update
   - title: New task title
   - content: New markdown body/notes
+  - items: Optional checklist/subtask items [{ id?, title, status? }]
+  - repeat: Optional recurring rule in RRULE format (must start with "RRULE:")
   - startDate: New start date in ISO 8601 format
   - dueDate: New due date in ISO 8601 format
   - priority: 0 (none), 1 (low), 3 (medium), 5 (high)
@@ -405,6 +532,25 @@ Errors:
         taskId: z.string().min(1).describe('TickTick task ID'),
         title: z.string().min(1).describe('Task title').optional(),
         content: z.string().describe('Task body/notes in markdown').optional(),
+        items: z
+          .array(
+            z.object({
+              id: z.string().min(1).describe('Checklist item ID').optional(),
+              title: z.string().trim().min(1).describe('Checklist item title'),
+              status: z.union([z.literal(0), z.literal(1)]).describe('Checklist item status (0=active, 1=completed)').optional(),
+            }),
+          )
+          .max(500)
+          .describe('Checklist/subtask items')
+          .optional(),
+        repeat: z
+          .string()
+          .trim()
+          .min(1)
+          .max(512)
+          .refine((value) => value.startsWith('RRULE:'), { message: 'repeat must start with RRULE:' })
+          .describe('Recurring rule in RRULE format')
+          .optional(),
         startDate: z.string().describe('Start date in ISO 8601 format').optional(),
         dueDate: z.string().describe('Due date in ISO 8601 format').optional(),
         priority: z
