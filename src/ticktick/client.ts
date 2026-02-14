@@ -44,6 +44,7 @@ const BACKOFF_BASE_MS = 150;
 const REQUEST_TIMEOUT_MS = 8_000;
 const TOKEN_KV_TTL_SECONDS = 60 * 60 * 24 * 30;
 const ACTIVE_TASK_IDS_CACHE_TTL_MS = 5_000;
+const DELETED_TASK_TOMBSTONE_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 interface PersistedTokens {
   accessToken: string;
@@ -158,6 +159,21 @@ export class TickTickClient {
 
   private get tokensKvKey(): string {
     return `ticktick_tokens:${this.props.userId}`;
+  }
+
+  private deletedTaskKvKey(projectId: string, taskId: string): string {
+    return `ticktick_deleted_task:${this.props.userId}:${projectId}:${taskId}`;
+  }
+
+  private async markTaskDeleted(projectId: string, taskId: string): Promise<void> {
+    await this.env.OAUTH_KV.put(this.deletedTaskKvKey(projectId, taskId), '1', {
+      expirationTtl: DELETED_TASK_TOMBSTONE_TTL_SECONDS,
+    });
+  }
+
+  private async isTaskTombstoned(projectId: string, taskId: string): Promise<boolean> {
+    const marker = await this.env.OAUTH_KV.get(this.deletedTaskKvKey(projectId, taskId));
+    return marker === '1';
   }
 
   private async fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
@@ -435,6 +451,10 @@ export class TickTickClient {
   }
 
   async getTask(projectId: string, taskId: string): Promise<TickTickTask> {
+    if (await this.isTaskTombstoned(projectId, taskId)) {
+      throw new TaskNotFoundError();
+    }
+
     const task = await this.callApi<TickTickTask>({ path: `/project/${projectId}/task/${taskId}` });
 
     // TickTick can sometimes resolve deleted task IDs here. Enforce MCP contract:
@@ -502,5 +522,6 @@ export class TickTickClient {
       method: 'DELETE',
     });
     this.invalidateActiveTaskCache(projectId);
+    await this.markTaskDeleted(projectId, taskId);
   }
 }

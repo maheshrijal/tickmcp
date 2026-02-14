@@ -312,6 +312,19 @@ describe('TickTickClient', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it('returns TaskNotFoundError after deleteTask even if upstream still resolves the task', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    await client.deleteTask('p1', 't1');
+    await expect(client.getTask('p1', 't1')).rejects.toBeInstanceOf(TaskNotFoundError);
+
+    // getTask is blocked by tombstone and must not call TickTick endpoint.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('dueFilter today includes only today and excludes overdue', async () => {
     const now = new Date();
     const fmt = (d: Date) => d.toISOString().slice(0, 10);

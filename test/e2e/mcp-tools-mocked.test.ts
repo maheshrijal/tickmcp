@@ -94,11 +94,12 @@ describe('MCP tools end-to-end (mocked TickTick upstream)', () => {
       }
 
       if (path === '/open/v1/project/p1/task/t1' && method === 'DELETE') {
-        state.task = { ...state.task, deleted: true, status: 0 };
+        state.task = { ...state.task, deleted: true, status: 2 };
         return new Response(null, { status: 204 });
       }
 
-      // Simulate stale upstream behavior: task endpoint still resolves after delete.
+      // Simulate stale upstream behavior: task endpoint still resolves after delete,
+      // including tasks that appear completed.
       if (path === '/open/v1/project/p1/task/t1' && method === 'GET') {
         const taskResponse = {
           id: 't1',

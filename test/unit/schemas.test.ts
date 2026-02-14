@@ -27,7 +27,7 @@ describe('tool schemas', () => {
     expect(() => listTasksSchema.parse({ dueFilter: 'next_month' })).toThrow();
   });
 
-  it('normalizes valid dates to ISO', () => {
-    expect(normalizeDateInput('2026-02-08T10:30:00Z')).toBe('2026-02-08T10:30:00.000Z');
+  it('normalizes valid dates to TickTick UTC offset format', () => {
+    expect(normalizeDateInput('2026-02-08T10:30:00Z')).toBe('2026-02-08T10:30:00.000+0000');
   });
 });

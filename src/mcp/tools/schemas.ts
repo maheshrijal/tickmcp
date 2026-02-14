@@ -99,5 +99,6 @@ export function normalizeDateInput(value: string | undefined): string | undefine
     throw new ValidationAppError('Invalid ISO date string', { value });
   }
 
-  return date.toISOString();
+  // TickTick expects timezone offset in "+0000" form rather than "Z".
+  return date.toISOString().replace('Z', '+0000');
 }
