@@ -284,6 +284,7 @@ Use when: "Show me the details of task X" — requires both projectId and taskId
 
 Errors:
   - TICKTICK_AUTH_REQUIRED: User needs to re-authorize TickTick
+  - TASK_NOT_FOUND: Task no longer exists (for example, after deletion)
   - VALIDATION_ERROR: Invalid input parameters`,
       inputSchema: {
         projectId: z.string().min(1).describe('TickTick project ID'),

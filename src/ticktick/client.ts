@@ -2,7 +2,7 @@ import { Props } from '../auth/props';
 import { refreshTickTickToken } from '../auth/ticktick-upstream';
 import { Env } from '../types/env';
 import { TickTickProject, TickTickTask } from '../types/models';
-import { TickTickApiError, TickTickAuthRequiredError, TickTickRateLimitError } from '../utils/errors';
+import { TaskNotFoundError, TickTickApiError, TickTickAuthRequiredError, TickTickRateLimitError } from '../utils/errors';
 
 export type TaskDueFilter = 'today' | 'tomorrow' | 'overdue' | 'this_week';
 
@@ -121,13 +121,13 @@ function matchesDueFilter(task: TickTickTask, filter: TaskDueFilter): boolean {
 
   switch (filter) {
     case 'today':
-      return dueDate <= today;
+      return dueDate === today;
     case 'tomorrow':
       return dueDate >= tomorrow && dueDate < dayAfterTomorrow;
     case 'overdue':
       return dueDate < today;
     case 'this_week':
-      return dueDate <= today || (dueDate >= today && dueDate < weekLater);
+      return dueDate >= today && dueDate < weekLater;
     default:
       return false;
   }
@@ -412,7 +412,18 @@ export class TickTickClient {
   }
 
   async getTask(projectId: string, taskId: string): Promise<TickTickTask> {
-    return this.callApi<TickTickTask>({ path: `/project/${projectId}/task/${taskId}` });
+    const task = await this.callApi<TickTickTask>({ path: `/project/${projectId}/task/${taskId}` });
+
+    // TickTick can sometimes resolve deleted task IDs here. Enforce MCP contract:
+    // active tasks must still exist in the project's active task set.
+    if (typeof task.status !== 'number' || task.status === 0) {
+      const { tasks } = await this.listTasks({ projectId, status: 0, limit: 5000, offset: 0 });
+      if (!tasks.some((candidate) => candidate.id === taskId)) {
+        throw new TaskNotFoundError();
+      }
+    }
+
+    return task;
   }
 
   async createTask(input: CreateTaskInput): Promise<TickTickTask> {

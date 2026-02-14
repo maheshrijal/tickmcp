@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'MCP_RATE_LIMITED'
   | 'TICKTICK_RATE_LIMITED'
   | 'TICKTICK_API_ERROR'
+  | 'TASK_NOT_FOUND'
   | 'VALIDATION_ERROR'
   | 'INTERNAL_ERROR';
 
@@ -37,6 +38,12 @@ export class ValidationAppError extends AppError {
 export class TickTickApiError extends AppError {
   constructor(message: string, status = 502, details?: Record<string, unknown>) {
     super('TICKTICK_API_ERROR', message, status, details);
+  }
+}
+
+export class TaskNotFoundError extends AppError {
+  constructor(message = 'Task not found') {
+    super('TASK_NOT_FOUND', message, 404);
   }
 }
 

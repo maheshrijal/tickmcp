@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TickTickClient } from '../../src/ticktick/client';
 import { Props } from '../../src/auth/props';
 import { Env } from '../../src/types/env';
-import { TickTickAuthRequiredError, TickTickRateLimitError } from '../../src/utils/errors';
+import { TaskNotFoundError, TickTickAuthRequiredError, TickTickRateLimitError } from '../../src/utils/errors';
 
 function makeProps(overrides?: Partial<Props>): Props {
   return {
@@ -176,5 +176,113 @@ describe('TickTickClient', () => {
 
     await expect(client.listProjects()).rejects.toBeInstanceOf(TickTickAuthRequiredError);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('throws TaskNotFoundError for active task missing from active project data', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 't1',
+            projectId: 'p1',
+            title: 'task',
+            status: 0,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            tasks: [{ id: 't2', projectId: 'p1', title: 'other', status: 0 }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    await expect(client.getTask('p1', 't1')).rejects.toBeInstanceOf(TaskNotFoundError);
+  });
+
+  it('returns completed task even if not in active project data', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: 't1',
+          projectId: 'p1',
+          title: 'completed',
+          status: 2,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    const task = await client.getTask('p1', 't1');
+    expect(task.status).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('dueFilter today includes only today and excludes overdue', async () => {
+    const now = new Date();
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const addDays = (days: number) => {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      d.setUTCDate(d.getUTCDate() + days);
+      return fmt(d);
+    };
+    const today = addDays(0);
+    const yesterday = addDays(-1);
+    const tomorrow = addDays(1);
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          tasks: [
+            { id: 'today', projectId: 'p1', title: 'today', dueDate: `${today}T10:00:00.000+0000`, timeZone: 'UTC' },
+            { id: 'yesterday', projectId: 'p1', title: 'yesterday', dueDate: `${yesterday}T10:00:00.000+0000`, timeZone: 'UTC' },
+            { id: 'tomorrow', projectId: 'p1', title: 'tomorrow', dueDate: `${tomorrow}T10:00:00.000+0000`, timeZone: 'UTC' },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    const result = await client.listTasks({ projectId: 'p1', dueFilter: 'today' });
+    expect(result.tasks.map((task) => task.id)).toEqual(['today']);
+  });
+
+  it('dueFilter this_week excludes overdue and includes next six days only', async () => {
+    const now = new Date();
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const addDays = (days: number) => {
+      const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      d.setUTCDate(d.getUTCDate() + days);
+      return fmt(d);
+    };
+    const yesterday = addDays(-1);
+    const today = addDays(0);
+    const plus6 = addDays(6);
+    const plus7 = addDays(7);
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          tasks: [
+            { id: 'yesterday', projectId: 'p1', title: 'yesterday', dueDate: `${yesterday}T10:00:00.000+0000`, timeZone: 'UTC' },
+            { id: 'today', projectId: 'p1', title: 'today', dueDate: `${today}T10:00:00.000+0000`, timeZone: 'UTC' },
+            { id: 'plus6', projectId: 'p1', title: 'plus6', dueDate: `${plus6}T10:00:00.000+0000`, timeZone: 'UTC' },
+            { id: 'plus7', projectId: 'p1', title: 'plus7', dueDate: `${plus7}T10:00:00.000+0000`, timeZone: 'UTC' },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    const result = await client.listTasks({ projectId: 'p1', dueFilter: 'this_week' });
+    expect(result.tasks.map((task) => task.id)).toEqual(['today', 'plus6']);
   });
 });
