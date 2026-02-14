@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy --env=\"\"",
-    "deploy:dev": "wrangler deploy --env=\"\"",
-    "deploy:production": "wrangler deploy --env production",
+    "build:homepage": "tsx src/homepage/build-homepage.ts",
+    "dev": "npm run build:homepage && wrangler dev",
+    "deploy": "npm run build:homepage && wrangler deploy --env=\"\"",
+    "deploy:dev": "npm run build:homepage && wrangler deploy --env=\"\"",
+    "deploy:production": "npm run build:homepage && wrangler deploy --env production",
     "db:migrate": "wrangler d1 migrations apply tickmcp-dev --local",
     "db:migrate:dev": "wrangler d1 migrations apply tickmcp-dev --env=\"\"",
     "db:migrate:production": "wrangler d1 migrations apply tickmcp-prod --env production",
@@ -23,6 +24,12 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260129.0",
+    "@types/node": "^25.2.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.3",
     "vitest": "^2.1.9",
     "wrangler": "^4.2.1"
