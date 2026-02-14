@@ -10,7 +10,7 @@
     "deploy:production": "wrangler deploy --env production",
     "db:migrate": "wrangler d1 migrations apply tickmcp-dev --local",
     "db:migrate:dev": "wrangler d1 migrations apply tickmcp-dev --env=\"\"",
-    "db:migrate:production": "wrangler d1 migrations apply tickmcp-prod --env production",
+    "db:migrate:production": "wrangler d1 migrations apply tickmcp-prod --env production --remote",
     "check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
