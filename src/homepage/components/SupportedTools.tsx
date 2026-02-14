@@ -27,6 +27,14 @@ export function SupportedTools() {
                 <span className="tool-dot dot-green" aria-hidden="true" />
                 <code>ticktick_get_project()</code>
               </li>
+              <li>
+                <span className="tool-dot dot-blue" aria-hidden="true" />
+                <code>ticktick_create_project()</code>
+              </li>
+              <li>
+                <span className="tool-dot dot-blue" aria-hidden="true" />
+                <code>ticktick_update_project()</code>
+              </li>
             </ul>
           </div>
         </div>
@@ -45,11 +53,11 @@ export function SupportedTools() {
             </li>
             <li>
               <span className="tool-dot dot-blue" aria-hidden="true" />
-              <code>ticktick_create_task()</code>
+              <code>ticktick_create_task(repeat?, items?)</code>
             </li>
             <li>
               <span className="tool-dot dot-blue" aria-hidden="true" />
-              <code>ticktick_update_task()</code>
+              <code>ticktick_update_task(repeat?, items?)</code>
             </li>
             <li>
               <span className="tool-dot dot-orange" aria-hidden="true" />
@@ -99,7 +107,7 @@ export function SupportedTools() {
           </div>
 
           <ul className="roadmap" aria-label="Planned features">
-            <li>Project CRUD</li>
+            <li>Project delete</li>
             <li>Tags</li>
             <li>Habits</li>
             <li>Webhooks</li>

@@ -27,6 +27,9 @@ export interface TickTickTask {
   projectId: string;
   title: string;
   content?: string;
+  desc?: string;
+  items?: TickTickChecklistItem[];
+  repeat?: string;
   dueDate?: string;
   startDate?: string;
   status?: number;
@@ -41,4 +44,15 @@ export interface TickTickProject {
   color?: string;
   viewMode?: string;
   closed?: boolean;
+}
+
+export interface TickTickChecklistItem {
+  id?: string;
+  title: string;
+  status?: number;
+  completedTime?: string;
+  isAllDay?: boolean;
+  startDate?: string;
+  dueDate?: string;
+  timeZone?: string;
 }
