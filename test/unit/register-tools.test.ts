@@ -8,6 +8,8 @@ const TOOL_NAMES = [
   'ticktick_auth_status',
   'ticktick_list_projects',
   'ticktick_get_project',
+  'ticktick_create_project',
+  'ticktick_update_project',
   'ticktick_list_tasks',
   'ticktick_get_task',
   'ticktick_create_task',
@@ -60,9 +62,9 @@ describe('register-tools metadata', () => {
     tools = getRegisteredTools(server);
   });
 
-  it('registers exactly 9 tools', () => {
+  it('registers exactly 11 tools', () => {
     const names = Object.keys(tools);
-    expect(names).toHaveLength(9);
+    expect(names).toHaveLength(11);
     for (const name of TOOL_NAMES) {
       expect(names).toContain(name);
     }
@@ -103,6 +105,8 @@ describe('register-tools metadata', () => {
     ticktick_auth_status: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     ticktick_list_projects: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     ticktick_get_project: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    ticktick_create_project: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    ticktick_update_project: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     ticktick_list_tasks: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     ticktick_get_task: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     ticktick_create_task: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },

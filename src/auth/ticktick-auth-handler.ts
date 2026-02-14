@@ -306,19 +306,21 @@ footer{
     <ul>
       <li><code>ticktick_list_projects()</code></li>
       <li><code>ticktick_get_project({ projectId })</code></li>
+      <li><code>ticktick_create_project({ idempotencyKey, name, color?, viewMode? })</code></li>
+      <li><code>ticktick_update_project({ idempotencyKey, projectId, name?, color?, viewMode? })</code></li>
     </ul>
     <h3>Tasks</h3>
     <ul>
       <li><code>ticktick_list_tasks({ projectId?, status?, dueFilter? })</code></li>
       <li><code>ticktick_get_task({ projectId, taskId })</code></li>
-      <li><code>ticktick_create_task({ idempotencyKey, projectId, title, ... })</code></li>
-      <li><code>ticktick_update_task({ idempotencyKey, projectId, taskId, ... })</code></li>
+      <li><code>ticktick_create_task({ idempotencyKey, projectId, title, repeat?, items?, ... })</code></li>
+      <li><code>ticktick_update_task({ idempotencyKey, projectId, taskId, repeat?, items?, ... })</code></li>
       <li><code>ticktick_complete_task({ idempotencyKey, projectId, taskId })</code></li>
       <li><code>ticktick_delete_task({ idempotencyKey, projectId, taskId })</code></li>
     </ul>
     <h3>Not Supported Yet</h3>
     <ul>
-      <li>Project create/update/delete tools</li>
+      <li>Project delete tool</li>
       <li>Tags, focus, habits, and calendar-specific endpoints</li>
       <li>Webhook/event subscriptions</li>
     </ul>
