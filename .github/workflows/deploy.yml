@@ -12,6 +12,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   deploy-dev:
     name: Deploy Dev (PR)
@@ -19,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     concurrency:
-      group: deploy-dev-pr-${{ github.event.pull_request.number }}
+      group: deploy-dev
       cancel-in-progress: true
     steps:
       - name: Checkout
