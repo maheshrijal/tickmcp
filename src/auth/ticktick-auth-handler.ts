@@ -61,6 +61,117 @@ function faviconSvg(): string {
 </svg>`;
 }
 
+function socialCardSvg(): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#111214"/>
+      <stop offset="100%" stop-color="#1f2a36"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#f0b44d"/>
+      <stop offset="100%" stop-color="#ff9f53"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="980" cy="120" r="180" fill="#2a3948" opacity=".35"/>
+  <circle cx="1060" cy="500" r="220" fill="#1f88b5" opacity=".18"/>
+  <rect x="72" y="84" width="1056" height="462" rx="28" fill="#14171c" stroke="#475362"/>
+  <text x="132" y="240" fill="#f7f3e8" font-size="78" font-family="'Avenir Next','Segoe UI',sans-serif" font-weight="700">tickmcp</text>
+  <text x="132" y="305" fill="#d5ccbb" font-size="36" font-family="'Avenir Next','Segoe UI',sans-serif">Remote TickTick MCP server</text>
+  <rect x="132" y="350" width="374" height="58" rx="10" fill="#1a1d21" stroke="#475362"/>
+  <text x="156" y="388" fill="#f0b44d" font-size="28" font-family="'IBM Plex Mono',Menlo,monospace">https://tickmcp.mrjl.dev/mcp</text>
+  <text x="132" y="465" fill="#6ecdf4" font-size="26" font-family="'IBM Plex Mono',Menlo,monospace">OAuth + Cloudflare Workers + MCP</text>
+  <rect x="954" y="438" width="86" height="86" rx="16" fill="url(#accent)"/>
+  <path d="M978 484l22 23 40-47" fill="none" stroke="#111214" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+}
+
+function legalPageHtml(baseUrl: string, page: 'about' | 'contact' | 'privacy'): string {
+  const content =
+    page === 'about'
+      ? {
+          title: 'About tickmcp and Project Scope',
+          description: 'About tickmcp, the open source TickTick MCP server, including project goals and operating scope.',
+          body:
+            'tickmcp is an open source remote MCP server for TickTick, maintained by Mahesh Rijal. The project is designed for practical interoperability across MCP clients and dependable OAuth handling on Cloudflare Workers. The primary goal is operational clarity: one endpoint contract, explicit auth flow behavior, and transparent source code. The repository documents current capabilities, known limitations, and implementation details so teams can evaluate fit before integrating. Development emphasizes conservative defaults for auth and request handling, along with clear release history for production users.',
+        }
+      : page === 'contact'
+        ? {
+            title: 'Contact and Support Channels',
+            description: 'How to contact tickmcp maintainers for support, issues, collaboration, and responsible disclosure.',
+            body:
+              'For support, issue reports, and project discussion, use the public GitHub repository issues and discussions. That channel is preferred for reproducible bugs, feature requests, and implementation questions because it keeps context visible for future contributors. Security-sensitive concerns should be disclosed privately to the maintainer instead of public issue threads. When reporting issues, include endpoint path, request method, status code, and timestamp so maintainers can triage quickly and avoid unnecessary back and forth.',
+          }
+        : {
+            title: 'Privacy and Data Handling',
+            description: 'Privacy summary for tickmcp, covering OAuth token handling, request data usage, and operational retention.',
+            body:
+              'tickmcp processes OAuth tokens and API requests required to connect TickTick with MCP clients. Data is handled for service operation, access control, and security monitoring. Token and request data are used only for service functionality and troubleshooting, not for unrelated profiling. Storage and retention behavior can change as the project evolves, so users should review repository documentation for current operational details. If your organization has strict governance requirements, validate deployment settings and retention expectations before production use.',
+          };
+
+  const canonicalUrl = `${baseUrl}/${page}`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${content.title} | tickmcp</title>
+  <meta name="description" content="${content.description}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${content.title} | tickmcp" />
+  <meta property="og:description" content="${content.description}" />
+  <meta property="og:url" content="${canonicalUrl}" />
+  <meta property="og:image" content="${baseUrl}/social-card.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${content.title} | tickmcp" />
+  <meta name="twitter:description" content="${content.description}" />
+  <meta name="twitter:image" content="${baseUrl}/social-card.svg" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="canonical" href="${canonicalUrl}" />
+  <style>
+    body{margin:0;padding:2rem;font-family:ui-sans-serif,system-ui,sans-serif;background:#111214;color:#f7f3e8;line-height:1.6}
+    main{max-width:760px;margin:0 auto}
+    h1{font-size:2rem;line-height:1.2;margin:0 0 1rem}
+    p{font-size:1rem;color:#d5ccbb}
+    a{color:#f0b44d}
+    nav{margin-top:1.25rem;font-size:.95rem}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>${content.title}</h1>
+    <p>${content.body}</p>
+    <nav>
+      <a href="/">Home</a> ·
+      <a href="/about">About</a> ·
+      <a href="/contact">Contact</a> ·
+      <a href="/privacy">Privacy</a>
+    </nav>
+  </main>
+</body>
+</html>`;
+}
+
+function robotsTxt(baseUrl: string): string {
+  return `User-agent: *
+Allow: /
+
+Sitemap: ${baseUrl}/sitemap.xml
+`;
+}
+
+function sitemapXml(baseUrl: string): string {
+  const now = new Date().toISOString();
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${baseUrl}/</loc><lastmod>${now}</lastmod></url>
+  <url><loc>${baseUrl}/about</loc><lastmod>${now}</lastmod></url>
+  <url><loc>${baseUrl}/contact</loc><lastmod>${now}</lastmod></url>
+  <url><loc>${baseUrl}/privacy</loc><lastmod>${now}</lastmod></url>
+</urlset>`;
+}
+
 function homepageHtml(baseUrl: string): string {
   const safeBase = baseUrl
     .replace(/&/g, '&amp;')
@@ -74,10 +185,12 @@ function homepageHtml(baseUrl: string): string {
 function securityHeaders(contentType: string): Record<string, string> {
   return {
     'content-type': contentType,
+    'cache-control': 'public, max-age=300',
     'x-frame-options': 'DENY',
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'no-referrer',
-    'content-security-policy': "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+    'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   };
 }
 
@@ -112,11 +225,43 @@ export const tickTickAuthHandler: ExportedHandler<Env> = {
       });
     }
 
+    if (request.method === 'GET' && ['/about', '/contact', '/privacy'].includes(url.pathname)) {
+      const page = url.pathname.slice(1) as 'about' | 'contact' | 'privacy';
+      return new Response(legalPageHtml(baseUrl, page), {
+        status: 200,
+        headers: securityHeaders('text/html; charset=utf-8'),
+      });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/robots.txt') {
+      return new Response(robotsTxt(baseUrl), {
+        status: 200,
+        headers: securityHeaders('text/plain; charset=utf-8'),
+      });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/sitemap.xml') {
+      return new Response(sitemapXml(baseUrl), {
+        status: 200,
+        headers: securityHeaders('application/xml; charset=utf-8'),
+      });
+    }
+
     if (request.method === 'GET' && url.pathname === '/favicon.svg') {
       return new Response(faviconSvg(), {
         status: 200,
         headers: {
           'content-type': 'image/svg+xml; charset=utf-8',
+          'cache-control': 'public, max-age=86400',
+        },
+      });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/social-card.svg') {
+      return new Response(socialCardSvg(), {
+        status: 200,
+        headers: {
+          ...securityHeaders('image/svg+xml; charset=utf-8'),
           'cache-control': 'public, max-age=86400',
         },
       });
