@@ -1,76 +1,72 @@
+type ToolItem = {
+  label: string;
+  tone: 'green' | 'blue' | 'orange';
+};
+
+const AUTH_TOOLS: ToolItem[] = [{ label: 'ticktick_auth_status()', tone: 'green' }];
+
+const PROJECT_TOOLS: ToolItem[] = [
+  { label: 'ticktick_list_projects()', tone: 'green' },
+  { label: 'ticktick_get_project()', tone: 'green' },
+  { label: 'ticktick_create_project()', tone: 'blue' },
+  { label: 'ticktick_update_project()', tone: 'blue' },
+];
+
+const TASK_TOOLS: ToolItem[] = [
+  { label: 'ticktick_list_tasks()', tone: 'green' },
+  { label: 'ticktick_get_task()', tone: 'green' },
+  { label: 'ticktick_create_task(repeat?, items?)', tone: 'blue' },
+  { label: 'ticktick_update_task(repeat?, items?)', tone: 'blue' },
+  { label: 'ticktick_complete_task()', tone: 'orange' },
+  { label: 'ticktick_delete_task()', tone: 'orange' },
+];
+
+const ENDPOINTS = [
+  { method: 'POST', path: '/mcp' },
+  { method: 'GET', path: '/authorize' },
+  { method: 'GET', path: '/callback' },
+  { method: 'POST', path: '/token' },
+  { method: 'POST', path: '/register' },
+] as const;
+
+const ROADMAP = ['Project delete', 'Tags', 'Habits', 'Webhooks', 'Calendar'] as const;
+
+function ToolList({ items }: { items: ToolItem[] }) {
+  return (
+    <ul className="tool-list">
+      {items.map((item) => (
+        <li key={item.label}>
+          <span className={`tool-dot dot-${item.tone}`} aria-hidden="true" />
+          <code>{item.label}</code>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function SupportedTools() {
   return (
     <section className="page-section" id="api-surface">
       <h2 className="section-label">API Surface</h2>
 
       <div className="tools-columns">
-        {/* Column 1: Auth + Projects */}
         <div>
           <div className="tool-group">
             <h3>Auth</h3>
-            <ul className="tool-list">
-              <li>
-                <span className="tool-dot dot-green" aria-hidden="true" />
-                <code>ticktick_auth_status()</code>
-              </li>
-            </ul>
+            <ToolList items={AUTH_TOOLS} />
           </div>
 
           <div className="tool-group tool-group--spaced">
             <h3>Projects</h3>
-            <ul className="tool-list">
-              <li>
-                <span className="tool-dot dot-green" aria-hidden="true" />
-                <code>ticktick_list_projects()</code>
-              </li>
-              <li>
-                <span className="tool-dot dot-green" aria-hidden="true" />
-                <code>ticktick_get_project()</code>
-              </li>
-              <li>
-                <span className="tool-dot dot-blue" aria-hidden="true" />
-                <code>ticktick_create_project()</code>
-              </li>
-              <li>
-                <span className="tool-dot dot-blue" aria-hidden="true" />
-                <code>ticktick_update_project()</code>
-              </li>
-            </ul>
+            <ToolList items={PROJECT_TOOLS} />
           </div>
         </div>
 
-        {/* Column 2: Tasks */}
         <div className="tool-group">
           <h3>Tasks</h3>
-          <ul className="tool-list">
-            <li>
-              <span className="tool-dot dot-green" aria-hidden="true" />
-              <code>ticktick_list_tasks()</code>
-            </li>
-            <li>
-              <span className="tool-dot dot-green" aria-hidden="true" />
-              <code>ticktick_get_task()</code>
-            </li>
-            <li>
-              <span className="tool-dot dot-blue" aria-hidden="true" />
-              <code>ticktick_create_task(repeat?, items?)</code>
-            </li>
-            <li>
-              <span className="tool-dot dot-blue" aria-hidden="true" />
-              <code>ticktick_update_task(repeat?, items?)</code>
-            </li>
-            <li>
-              <span className="tool-dot dot-orange" aria-hidden="true" />
-              <code>ticktick_complete_task()</code>
-            </li>
-            <li>
-              <span className="tool-dot dot-orange" aria-hidden="true" />
-              <code>ticktick_delete_task()</code>
-            </li>
-          </ul>
+          <ToolList items={TASK_TOOLS} />
         </div>
 
-        {/* Column 3: Endpoints */}
         <div>
           <div className="tool-group">
             <h3>HTTP Endpoints</h3>
@@ -82,36 +78,24 @@ export function SupportedTools() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td><span className="method-badge badge-post">POST</span></td>
-                  <td><code>/mcp</code></td>
-                </tr>
-                <tr>
-                  <td><span className="method-badge badge-get">GET</span></td>
-                  <td><code>/authorize</code></td>
-                </tr>
-                <tr>
-                  <td><span className="method-badge badge-get">GET</span></td>
-                  <td><code>/callback</code></td>
-                </tr>
-                <tr>
-                  <td><span className="method-badge badge-post">POST</span></td>
-                  <td><code>/token</code></td>
-                </tr>
-                <tr>
-                  <td><span className="method-badge badge-post">POST</span></td>
-                  <td><code>/register</code></td>
-                </tr>
+                {ENDPOINTS.map((endpoint) => (
+                  <tr key={`${endpoint.method}:${endpoint.path}`}>
+                    <td>
+                      <span className={`method-badge ${endpoint.method === 'POST' ? 'badge-post' : 'badge-get'}`}>
+                        {endpoint.method}
+                      </span>
+                    </td>
+                    <td><code>{endpoint.path}</code></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
           <ul className="roadmap" aria-label="Planned features">
-            <li>Project delete</li>
-            <li>Tags</li>
-            <li>Habits</li>
-            <li>Webhooks</li>
-            <li>Calendar</li>
+            {ROADMAP.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
           </ul>
         </div>
       </div>

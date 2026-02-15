@@ -1,39 +1,35 @@
 import { CodeBlock } from './CodeBlock';
 
 const BASE_URL = '__BASE_URL__';
-
-export function QuickOnboarding() {
-  return (
-    <section className="page-section" id="get-started">
-      <h2 className="section-label">Get Started</h2>
-      <div className="setup-list">
-        <div className="setup-item">
-          <div className="setup-header">
-            <span className="setup-name">Codex</span>
-          </div>
-          <CodeBlock>{`codex mcp add tickmcp --url ${BASE_URL}/mcp`}</CodeBlock>
-        </div>
-
-        <div className="setup-item">
-          <div className="setup-header">
-            <span className="setup-name">Claude Code</span>
-          </div>
-          <CodeBlock>{`claude mcp add tickmcp --transport http ${BASE_URL}/mcp`}</CodeBlock>
-        </div>
-
-        <div className="setup-item">
-          <div className="setup-header">
-            <span className="setup-name">Claude Desktop / Cursor</span>
-          </div>
-          <CodeBlock>{`{
+const ONBOARDING_ITEMS = [
+  { name: 'Codex', snippet: `codex mcp add tickmcp --url ${BASE_URL}/mcp` },
+  { name: 'Claude Code', snippet: `claude mcp add tickmcp --transport http ${BASE_URL}/mcp` },
+  {
+    name: 'Claude Desktop / Cursor',
+    snippet: `{
   "mcpServers": {
     "tickmcp": {
       "type": "streamableHttp",
       "url": "${BASE_URL}/mcp"
     }
   }
-}`}</CodeBlock>
-        </div>
+}`,
+  },
+];
+
+export function QuickOnboarding() {
+  return (
+    <section className="page-section" id="get-started">
+      <h2 className="section-label">Get Started</h2>
+      <div className="setup-list">
+        {ONBOARDING_ITEMS.map((item) => (
+          <div key={item.name} className="setup-item">
+            <div className="setup-header">
+              <span className="setup-name">{item.name}</span>
+            </div>
+            <CodeBlock>{item.snippet}</CodeBlock>
+          </div>
+        ))}
 
         <div className="setup-item">
           <div className="setup-header">

@@ -4,6 +4,7 @@ import { exchangeTickTickCode } from './ticktick-upstream';
 import { OAuthStatesRepository, UsersRepository } from '../db/repositories';
 import { Env } from '../types/env';
 import { HOMEPAGE_HTML_TEMPLATE } from '../homepage/homepage-html';
+import { SOCIAL_CARD_JPG_BASE64 } from '../homepage/social-card-jpg';
 
 function randomHex(size = 32): string {
   const bytes = crypto.getRandomValues(new Uint8Array(size));
@@ -48,6 +49,17 @@ function getBaseUrl(request: Request, env: Env): string {
   return env.PUBLIC_BASE_URL.replace(/\/$/, '');
 }
 
+function getSiteBaseUrl(request: Request, env: Env): string {
+  const host = request.headers.get('host')?.replace(/\/$/, '');
+  const protocol = request.url.startsWith('https://') ? 'https' : 'http';
+  const hostName = host?.split(':')[0] ?? '';
+  const isLocal = hostName === 'localhost' || hostName === '127.0.0.1' || hostName === '::1';
+  if (isLocal) {
+    return `${protocol}://${host}`;
+  }
+  return getBaseUrl(request, env);
+}
+
 function faviconSvg(): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
@@ -61,56 +73,70 @@ function faviconSvg(): string {
 </svg>`;
 }
 
-function socialCardSvg(): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <defs>
-    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0%" stop-color="#111214"/>
-      <stop offset="100%" stop-color="#1f2a36"/>
-    </linearGradient>
-    <linearGradient id="accent" x1="0" x2="1" y1="0" y2="0">
-      <stop offset="0%" stop-color="#f0b44d"/>
-      <stop offset="100%" stop-color="#ff9f53"/>
-    </linearGradient>
-  </defs>
-  <rect width="1200" height="630" fill="url(#bg)"/>
-  <circle cx="980" cy="120" r="180" fill="#2a3948" opacity=".35"/>
-  <circle cx="1060" cy="500" r="220" fill="#1f88b5" opacity=".18"/>
-  <rect x="72" y="84" width="1056" height="462" rx="28" fill="#14171c" stroke="#475362"/>
-  <text x="132" y="240" fill="#f7f3e8" font-size="78" font-family="'Avenir Next','Segoe UI',sans-serif" font-weight="700">tickmcp</text>
-  <text x="132" y="305" fill="#d5ccbb" font-size="36" font-family="'Avenir Next','Segoe UI',sans-serif">Remote TickTick MCP server</text>
-  <rect x="132" y="350" width="374" height="58" rx="10" fill="#1a1d21" stroke="#475362"/>
-  <text x="156" y="388" fill="#f0b44d" font-size="28" font-family="'IBM Plex Mono',Menlo,monospace">https://tickmcp.mrjl.dev/mcp</text>
-  <text x="132" y="465" fill="#6ecdf4" font-size="26" font-family="'IBM Plex Mono',Menlo,monospace">OAuth + Cloudflare Workers + MCP</text>
-  <rect x="954" y="438" width="86" height="86" rx="16" fill="url(#accent)"/>
-  <path d="M978 484l22 23 40-47" fill="none" stroke="#111214" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
+let socialCardJpgCache: ArrayBuffer | null = null;
+
+function socialCardJpgBuffer(): ArrayBuffer {
+  if (socialCardJpgCache) {
+    return socialCardJpgCache;
+  }
+  const compact = SOCIAL_CARD_JPG_BASE64.replace(/\s+/g, '');
+  const binary = atob(compact);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  socialCardJpgCache = bytes.buffer;
+  return socialCardJpgCache;
 }
 
 function legalPageHtml(baseUrl: string, page: 'about' | 'contact' | 'privacy'): string {
+  const publishedDate = '2026-02-15';
+  const authorName = 'Mahesh Rijal';
   const content =
     page === 'about'
       ? {
           title: 'About tickmcp and Project Scope',
-          description: 'About tickmcp, the open source TickTick MCP server, including project goals and operating scope.',
-          body:
-            'tickmcp is an open source remote MCP server for TickTick, maintained by Mahesh Rijal. The project is designed for practical interoperability across MCP clients and dependable OAuth handling on Cloudflare Workers. The primary goal is operational clarity: one endpoint contract, explicit auth flow behavior, and transparent source code. The repository documents current capabilities, known limitations, and implementation details so teams can evaluate fit before integrating. Development emphasizes conservative defaults for auth and request handling, along with clear release history for production users.',
+          description:
+            'Detailed background on tickmcp, including project goals, architecture priorities, maintenance principles, and practical operating scope.',
+          paragraphs: [
+            'tickmcp is an open source remote MCP server for TickTick, maintained by Mahesh Rijal. The project is designed for practical interoperability across MCP clients and dependable OAuth handling on Cloudflare Workers. The primary goal is operational clarity: one endpoint contract, explicit auth flow behavior, and transparent source code.',
+            'The repository documents current capabilities, known limitations, and implementation details so teams can evaluate fit before integrating. Development emphasizes conservative defaults for auth and request handling, along with clear release history for production users. The intended audience includes engineers, operators, and advanced users who need repeatable task automation with clear failure modes and auditable behavior in production-like environments.',
+            'Project scope is intentionally focused on reliable core workflows instead of broad feature sprawl. That means stable endpoint contracts, well-defined error semantics, and straightforward onboarding paths are prioritized over cosmetic complexity. This discipline helps teams adopt the integration with confidence and reduce long-term operational surprises.',
+          ],
         }
       : page === 'contact'
         ? {
             title: 'Contact and Support Channels',
-            description: 'How to contact tickmcp maintainers for support, issues, collaboration, and responsible disclosure.',
-            body:
-              'For support, issue reports, and project discussion, use the public GitHub repository issues and discussions. That channel is preferred for reproducible bugs, feature requests, and implementation questions because it keeps context visible for future contributors. Security-sensitive concerns should be disclosed privately to the maintainer instead of public issue threads. When reporting issues, include endpoint path, request method, status code, and timestamp so maintainers can triage quickly and avoid unnecessary back and forth.',
+            description:
+              'Contact channels for tickmcp support, issue reporting, collaboration requests, and responsible security disclosure workflows.',
+            paragraphs: [
+              'For support, issue reports, and project discussion, use the public GitHub repository issues and discussions. That channel is preferred for reproducible bugs, feature requests, and implementation questions because it keeps context visible for future contributors.',
+              'Security-sensitive concerns should be disclosed privately to the maintainer instead of public issue threads. When reporting issues, include endpoint path, request method, status code, and timestamp so maintainers can triage quickly and avoid unnecessary back and forth.',
+              'If your report involves OAuth redirects or token handling behavior, include environment context and a minimal reproduction sequence so maintainers can isolate whether the issue is configuration, upstream provider behavior, or code-level regression. Clear diagnostics reduce turnaround time and improve the quality of follow-up fixes.',
+            ],
           }
         : {
             title: 'Privacy and Data Handling',
-            description: 'Privacy summary for tickmcp, covering OAuth token handling, request data usage, and operational retention.',
-            body:
-              'tickmcp processes OAuth tokens and API requests required to connect TickTick with MCP clients. Data is handled for service operation, access control, and security monitoring. Token and request data are used only for service functionality and troubleshooting, not for unrelated profiling. Storage and retention behavior can change as the project evolves, so users should review repository documentation for current operational details. If your organization has strict governance requirements, validate deployment settings and retention expectations before production use.',
+            description:
+              'Privacy summary for tickmcp covering OAuth token handling, request processing, storage boundaries, retention, and deployment responsibilities.',
+            paragraphs: [
+              'tickmcp processes OAuth tokens and API requests required to connect TickTick with MCP clients. Data is handled for service operation, access control, and security monitoring. Token and request data are used only for service functionality and troubleshooting, not for unrelated profiling.',
+              'Storage and retention behavior can change as the project evolves, so users should review repository documentation for current operational details. If your organization has strict governance requirements, validate deployment settings and retention expectations before production use.',
+              'Self-hosted deployments should review secret handling, logging destinations, and data lifecycle policies so infrastructure settings stay aligned with internal compliance obligations and incident response expectations. Organizations should apply their own legal and policy review before exposing any production integration endpoint.',
+            ],
           };
 
   const canonicalUrl = `${baseUrl}/${page}`;
+  const jsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: `${content.title} | tickmcp`,
+    url: canonicalUrl,
+    datePublished: publishedDate,
+    dateModified: publishedDate,
+    author: { '@type': 'Person', name: authorName },
+    description: content.description,
+  });
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -122,13 +148,17 @@ function legalPageHtml(baseUrl: string, page: 'about' | 'contact' | 'privacy'): 
   <meta property="og:title" content="${content.title} | tickmcp" />
   <meta property="og:description" content="${content.description}" />
   <meta property="og:url" content="${canonicalUrl}" />
-  <meta property="og:image" content="${baseUrl}/social-card.svg" />
+  <meta property="og:image" content="${baseUrl}/social-card.jpg" />
+  <meta name="author" content="${authorName}" />
+  <meta property="article:published_time" content="${publishedDate}" />
+  <meta property="article:modified_time" content="${publishedDate}" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${content.title} | tickmcp" />
   <meta name="twitter:description" content="${content.description}" />
-  <meta name="twitter:image" content="${baseUrl}/social-card.svg" />
+  <meta name="twitter:image" content="${baseUrl}/social-card.jpg" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="canonical" href="${canonicalUrl}" />
+  <script type="application/ld+json">${jsonLd}</script>
   <style>
     body{margin:0;padding:2rem;font-family:ui-sans-serif,system-ui,sans-serif;background:#111214;color:#f7f3e8;line-height:1.6}
     main{max-width:760px;margin:0 auto}
@@ -141,7 +171,8 @@ function legalPageHtml(baseUrl: string, page: 'about' | 'contact' | 'privacy'): 
 <body>
   <main>
     <h1>${content.title}</h1>
-    <p>${content.body}</p>
+    <p><strong>Author:</strong> ${authorName} · <strong>Published:</strong> ${publishedDate}</p>
+    <p>${content.paragraphs.join('</p><p>')}</p>
     <nav>
       <a href="/">Home</a> ·
       <a href="/about">About</a> ·
@@ -209,6 +240,7 @@ export const tickTickAuthHandler: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const baseUrl = getBaseUrl(request, env);
+    const siteBaseUrl = getSiteBaseUrl(request, env);
 
     if (request.method === 'GET' && url.pathname === '/authorize') {
       return handleAuthorize(request, env, baseUrl);
@@ -219,7 +251,7 @@ export const tickTickAuthHandler: ExportedHandler<Env> = {
     }
 
     if (request.method === 'GET' && url.pathname === '/') {
-      return new Response(homepageHtml(baseUrl), {
+      return new Response(homepageHtml(siteBaseUrl), {
         status: 200,
         headers: securityHeaders('text/html; charset=utf-8'),
       });
@@ -227,21 +259,21 @@ export const tickTickAuthHandler: ExportedHandler<Env> = {
 
     if (request.method === 'GET' && ['/about', '/contact', '/privacy'].includes(url.pathname)) {
       const page = url.pathname.slice(1) as 'about' | 'contact' | 'privacy';
-      return new Response(legalPageHtml(baseUrl, page), {
+      return new Response(legalPageHtml(siteBaseUrl, page), {
         status: 200,
         headers: securityHeaders('text/html; charset=utf-8'),
       });
     }
 
     if (request.method === 'GET' && url.pathname === '/robots.txt') {
-      return new Response(robotsTxt(baseUrl), {
+      return new Response(robotsTxt(siteBaseUrl), {
         status: 200,
         headers: securityHeaders('text/plain; charset=utf-8'),
       });
     }
 
     if (request.method === 'GET' && url.pathname === '/sitemap.xml') {
-      return new Response(sitemapXml(baseUrl), {
+      return new Response(sitemapXml(siteBaseUrl), {
         status: 200,
         headers: securityHeaders('application/xml; charset=utf-8'),
       });
@@ -257,18 +289,18 @@ export const tickTickAuthHandler: ExportedHandler<Env> = {
       });
     }
 
-    if (request.method === 'GET' && url.pathname === '/social-card.svg') {
-      return new Response(socialCardSvg(), {
+    if (request.method === 'GET' && url.pathname === '/social-card.jpg') {
+      return new Response(socialCardJpgBuffer(), {
         status: 200,
         headers: {
-          ...securityHeaders('image/svg+xml; charset=utf-8'),
+          ...securityHeaders('image/jpeg'),
           'cache-control': 'public, max-age=86400',
         },
       });
     }
 
     if (request.method === 'GET' && url.pathname === '/favicon.ico') {
-      return Response.redirect(`${baseUrl}/favicon.svg`, 302);
+      return Response.redirect(`${siteBaseUrl}/favicon.svg`, 302);
     }
 
     if (request.method === 'GET' && url.pathname === '/.well-known/oauth-protected-resource') {

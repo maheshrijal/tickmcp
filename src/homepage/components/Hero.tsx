@@ -23,6 +23,9 @@ export function Hero() {
         <span className="endpoint-badge" aria-hidden="true">POST</span>
         <code>{BASE_URL}/mcp</code>
       </div>
+      <p className="hero-meta">
+        Maintained by <a href="https://maheshrijal.com/">Mahesh Rijal</a>
+      </p>
     </section>
   );
 }
