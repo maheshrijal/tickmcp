@@ -4,7 +4,7 @@ const BASE_URL = '__BASE_URL__';
 
 export function QuickOnboarding() {
   return (
-    <section className="page-section">
+    <section className="page-section" id="get-started">
       <h2 className="section-label">Get Started</h2>
       <div className="setup-list">
         <div className="setup-item">

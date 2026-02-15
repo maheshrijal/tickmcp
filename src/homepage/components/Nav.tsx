@@ -10,8 +10,12 @@ export function Nav() {
         tickmcp
       </a>
       <div className="nav-links">
+        <a href="#get-started">Setup</a>
+        <a href="#api-surface">API</a>
+        <a href="#trust">Trust</a>
         <a href="https://github.com/maheshrijal/tickmcp">GitHub</a>
-        <a href="https://github.com/maheshrijal/tickmcp#readme">Docs</a>
+        <a href="/about">About</a>
+        <a href="/contact">Contact</a>
       </div>
     </nav>
   );

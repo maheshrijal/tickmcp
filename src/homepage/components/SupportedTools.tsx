@@ -1,6 +1,6 @@
 export function SupportedTools() {
   return (
-    <section className="page-section">
+    <section className="page-section" id="api-surface">
       <h2 className="section-label">API Surface</h2>
 
       <div className="tools-columns">
