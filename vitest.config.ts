@@ -6,6 +6,8 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     coverage: {
+      include: ['src/**/*.ts'],
+      exclude: ['src/homepage/homepage-html.ts'],
       reporter: ['text', 'html'],
     },
   },
