@@ -224,6 +224,21 @@ describe('MCP tools end-to-end (mocked TickTick upstream)', () => {
     expect(thisWeekTasks).toEqual(['today', 'plus1', 'plus6']);
   });
 
+  it('returns VALIDATION_ERROR for ticktick_list_tasks status=2', async () => {
+    const { env } = createTestEnv();
+    const props = { userId: 'u-e2e-status' };
+    await env.OAUTH_KV.put(`ticktick_tokens:${props.userId}`, JSON.stringify(taskTokenPayload()));
+
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerTickTickTools(server, env, props);
+    const tools = getToolHandlers(server);
+
+    const result = await tools.ticktick_list_tasks({ projectId: 'p1', status: 2 });
+    expect(result.isError).toBe(true);
+    const payload = getErrorPayload(result);
+    expect(payload.code).toBe('VALIDATION_ERROR');
+  });
+
   it('normalizes create/update date inputs to TickTick +0000 format', async () => {
     const { env } = createTestEnv();
     const props = { userId: 'u-e2e-dates' };
@@ -295,5 +310,159 @@ describe('MCP tools end-to-end (mocked TickTick upstream)', () => {
     expect(seenBodies[0].dueDate).toBe('2026-02-08T16:30:00.000+0000');
     expect(seenBodies[1].startDate).toBe('2026-03-01T09:00:00.000+0000');
     expect(seenBodies[1].dueDate).toBe('2026-03-01T12:00:00.000+0000');
+  });
+
+  it('sends repeatFlag and extended task fields via create/update task tools', async () => {
+    const { env } = createTestEnv();
+    const props = { userId: 'u-e2e-recurrence' };
+    await env.OAUTH_KV.put(`ticktick_tokens:${props.userId}`, JSON.stringify(taskTokenPayload()));
+
+    const seenBodies: Array<Record<string, unknown>> = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      const url = new URL(typeof input === 'string' ? input : input.toString());
+      const path = url.pathname;
+
+      if (path === '/open/v1/task' && method === 'POST') {
+        const body = JSON.parse((init?.body as string) ?? '{}') as Record<string, unknown>;
+        seenBodies.push(body);
+        return new Response(
+          JSON.stringify({
+            id: 't1',
+            projectId: 'p1',
+            title: String(body.title),
+            repeatFlag: body.repeatFlag,
+            status: 0,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+
+      if (path === '/open/v1/task/t1' && method === 'POST') {
+        const body = JSON.parse((init?.body as string) ?? '{}') as Record<string, unknown>;
+        seenBodies.push(body);
+        return new Response(
+          JSON.stringify({
+            id: 't1',
+            projectId: 'p1',
+            title: String(body.title ?? 'updated'),
+            repeatFlag: body.repeatFlag,
+            status: 0,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+
+      throw new Error(`Unhandled mocked request: ${method} ${path}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerTickTickTools(server, env, props);
+    const tools = getToolHandlers(server);
+
+    const createResult = await tools.ticktick_create_task({
+      idempotencyKey: 'e2e-recurrence-create',
+      projectId: 'p1',
+      title: 'recurrence create',
+      repeat: 'RRULE:FREQ=DAILY;INTERVAL=1',
+      desc: 'plain description',
+      reminders: ['TRIGGER:P0DT0H30M0S'],
+      isAllDay: true,
+      timeZone: 'America/New_York',
+      kind: 'CHECKLIST',
+    });
+    assertToolOk(createResult, 'create_recurrence');
+
+    const updateResult = await tools.ticktick_update_task({
+      idempotencyKey: 'e2e-recurrence-update',
+      projectId: 'p1',
+      taskId: 't1',
+      repeatFlag: 'RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO',
+      desc: 'updated description',
+    });
+    assertToolOk(updateResult, 'update_recurrence');
+
+    expect(seenBodies).toHaveLength(2);
+    expect(seenBodies[0].repeatFlag).toBe('RRULE:FREQ=DAILY;INTERVAL=1');
+    expect(seenBodies[0].repeat).toBeUndefined();
+    expect(seenBodies[0].desc).toBe('plain description');
+    expect(seenBodies[0].reminders).toEqual(['TRIGGER:P0DT0H30M0S']);
+    expect(seenBodies[0].isAllDay).toBe(true);
+    expect(seenBodies[0].timeZone).toBe('America/New_York');
+    expect(seenBodies[0].kind).toBe('CHECKLIST');
+    expect(seenBodies[1].repeatFlag).toBe('RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO');
+  });
+
+  it('returns project data envelope from ticktick_get_project_data', async () => {
+    const { env } = createTestEnv();
+    const props = { userId: 'u-e2e-project-data' };
+    await env.OAUTH_KV.put(`ticktick_tokens:${props.userId}`, JSON.stringify(taskTokenPayload()));
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      const path = new URL(typeof input === 'string' ? input : input.toString()).pathname;
+      if (path === '/open/v1/project/p1/data' && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            project: { id: 'p1', name: 'Work' },
+            tasks: [{ id: 't1', projectId: 'p1', title: 'Task 1', repeatFlag: 'RRULE:FREQ=DAILY;INTERVAL=1' }],
+            columns: [{ id: 'c1', projectId: 'p1', name: 'Todo', sortOrder: 10 }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      throw new Error(`Unhandled mocked request: ${method} ${path}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerTickTickTools(server, env, props);
+    const tools = getToolHandlers(server);
+
+    const result = await tools.ticktick_get_project_data({ projectId: 'p1' });
+    assertToolOk(result, 'get_project_data');
+    const payload = result.structuredContent as Record<string, unknown>;
+    expect(payload.count).toBe(1);
+    expect(payload.project).toMatchObject({ id: 'p1', name: 'Work' });
+    const tasks = payload.tasks as Array<Record<string, unknown>>;
+    expect(tasks[0].repeat).toBe('RRULE:FREQ=DAILY;INTERVAL=1');
+    expect(tasks[0].repeatFlag).toBe('RRULE:FREQ=DAILY;INTERVAL=1');
+  });
+
+  it('supports ticktick_delete_project success and surfaces upstream errors', async () => {
+    const { env } = createTestEnv();
+    const props = { userId: 'u-e2e-delete-project' };
+    await env.OAUTH_KV.put(`ticktick_tokens:${props.userId}`, JSON.stringify(taskTokenPayload()));
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      const path = new URL(typeof input === 'string' ? input : input.toString()).pathname;
+      if (path === '/open/v1/project/p-ok' && method === 'DELETE') {
+        return new Response(null, { status: 204 });
+      }
+      if (path === '/open/v1/project/p-fail' && method === 'DELETE') {
+        return new Response('upstream error', { status: 500 });
+      }
+      throw new Error(`Unhandled mocked request: ${method} ${path}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerTickTickTools(server, env, props);
+    const tools = getToolHandlers(server);
+
+    const okResult = await tools.ticktick_delete_project({
+      idempotencyKey: 'e2e-delete-project-ok',
+      projectId: 'p-ok',
+    });
+    assertToolOk(okResult, 'delete_project_ok');
+
+    const failResult = await tools.ticktick_delete_project({
+      idempotencyKey: 'e2e-delete-project-fail',
+      projectId: 'p-fail',
+    });
+    expect(failResult.isError).toBe(true);
+    expect(getErrorPayload(failResult).code).toBe('TICKTICK_API_ERROR');
   });
 });

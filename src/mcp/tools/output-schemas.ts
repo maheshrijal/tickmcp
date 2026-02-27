@@ -12,6 +12,13 @@ const tickTickProjectSchema = z.object({
   kind: z.string().optional(),
 });
 
+const tickTickProjectColumnSchema = z.object({
+  id: z.string(),
+  projectId: z.string().optional(),
+  name: z.string().optional(),
+  sortOrder: z.number().optional(),
+});
+
 const tickTickTaskSchema = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -33,6 +40,7 @@ const tickTickTaskSchema = z.object({
     )
     .optional(),
   repeat: z.string().optional(),
+  repeatFlag: z.string().optional(),
   dueDate: z.string().optional(),
   startDate: z.string().optional(),
   status: z.number().optional(),
@@ -40,6 +48,8 @@ const tickTickTaskSchema = z.object({
   sortOrder: z.number().optional(),
   timeZone: z.string().optional(),
   isAllDay: z.boolean().optional(),
+  reminders: z.array(z.string()).optional(),
+  kind: z.enum(['TEXT', 'NOTE', 'CHECKLIST']).optional(),
   completedTime: z.string().optional(),
   createdTime: z.string().optional(),
   modifiedTime: z.string().optional(),
@@ -65,9 +75,22 @@ export const getProjectOutputSchema = {
   project: tickTickProjectSchema,
 };
 
+export const getProjectDataOutputSchema = {
+  ok: z.boolean(),
+  project: tickTickProjectSchema,
+  tasks: z.array(tickTickTaskSchema),
+  columns: z.array(tickTickProjectColumnSchema),
+  count: z.number(),
+};
+
 export const mutateProjectOutputSchema = {
   ok: z.boolean(),
   project: tickTickProjectSchema,
+};
+
+export const projectRefOutputSchema = {
+  ok: z.boolean(),
+  projectId: z.string(),
 };
 
 export const listTasksOutputSchema = {

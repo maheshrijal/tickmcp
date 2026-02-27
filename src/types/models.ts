@@ -30,12 +30,20 @@ export interface TickTickTask {
   desc?: string;
   items?: TickTickChecklistItem[];
   repeat?: string;
+  repeatFlag?: string;
   dueDate?: string;
   startDate?: string;
   status?: number;
   priority?: number;
+  sortOrder?: number;
   timeZone?: string;
   isAllDay?: boolean;
+  reminders?: string[];
+  kind?: TickTickTaskKind;
+  completedTime?: string;
+  createdTime?: string;
+  modifiedTime?: string;
+  tags?: string[];
 }
 
 export interface TickTickProject {
@@ -51,8 +59,18 @@ export interface TickTickChecklistItem {
   title: string;
   status?: number;
   completedTime?: string;
+  sortOrder?: number;
   isAllDay?: boolean;
   startDate?: string;
   dueDate?: string;
   timeZone?: string;
+}
+
+export type TickTickTaskKind = 'TEXT' | 'NOTE' | 'CHECKLIST';
+
+export interface TickTickProjectColumn {
+  id: string;
+  projectId?: string;
+  name?: string;
+  sortOrder?: number;
 }

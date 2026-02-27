@@ -1,15 +1,24 @@
 import { Props } from '../auth/props';
 import { refreshTickTickToken } from '../auth/ticktick-upstream';
 import { Env } from '../types/env';
-import { TickTickChecklistItem, TickTickProject, TickTickTask } from '../types/models';
-import { TaskNotFoundError, TickTickApiError, TickTickAuthRequiredError, TickTickRateLimitError } from '../utils/errors';
+import { TickTickChecklistItem, TickTickProject, TickTickProjectColumn, TickTickTask, TickTickTaskKind } from '../types/models';
+import { TaskNotFoundError, TickTickApiError, TickTickAuthRequiredError, TickTickRateLimitError, ValidationAppError } from '../utils/errors';
 
 export type TaskDueFilter = 'today' | 'tomorrow' | 'overdue' | 'this_week';
+export type TaskSortBy = 'createdTime' | 'modifiedTime' | 'dueDate' | 'priority' | 'title' | 'sortOrder';
+export type SortDirection = 'asc' | 'desc';
+
+type TickTickPriority = 0 | 1 | 3 | 5;
 
 export interface ListTasksInput {
   projectId?: string;
-  status?: number;
+  status?: 0;
   dueFilter?: TaskDueFilter;
+  dueDateFrom?: string;
+  dueDateTo?: string;
+  priority?: TickTickPriority;
+  sortBy?: TaskSortBy;
+  sortOrder?: SortDirection;
   limit?: number;
   offset?: number;
 }
@@ -18,11 +27,18 @@ export interface CreateTaskInput {
   projectId: string;
   title: string;
   content?: string;
+  desc?: string;
+  isAllDay?: boolean;
+  timeZone?: string;
+  reminders?: string[];
+  sortOrder?: number;
+  kind?: TickTickTaskKind;
   items?: TickTickChecklistItem[];
   repeat?: string;
+  repeatFlag?: string;
   startDate?: string;
   dueDate?: string;
-  priority?: 0 | 1 | 3 | 5;
+  priority?: TickTickPriority;
 }
 
 export interface UpdateTaskInput {
@@ -30,17 +46,52 @@ export interface UpdateTaskInput {
   taskId: string;
   title?: string;
   content?: string;
+  desc?: string;
+  isAllDay?: boolean;
+  timeZone?: string;
+  reminders?: string[];
+  sortOrder?: number;
+  kind?: TickTickTaskKind;
   items?: TickTickChecklistItem[];
   repeat?: string;
+  repeatFlag?: string;
   startDate?: string;
   dueDate?: string;
-  priority?: 0 | 1 | 3 | 5;
+  priority?: TickTickPriority;
+}
+
+export type TaskItemPatchOperation =
+  | {
+      op: 'add';
+      item: TickTickChecklistItem;
+      index?: number;
+    }
+  | {
+      op: 'update';
+      id: string;
+      item: Partial<Omit<TickTickChecklistItem, 'id'>>;
+    }
+  | {
+      op: 'remove';
+      id: string;
+    }
+  | {
+      op: 'toggle';
+      id: string;
+    };
+
+export interface PatchTaskItemsInput {
+  projectId: string;
+  taskId: string;
+  operations: TaskItemPatchOperation[];
 }
 
 export interface CreateProjectInput {
   name: string;
   color?: string;
   viewMode?: string;
+  sortOrder?: number;
+  kind?: 'TASK' | 'NOTE';
 }
 
 export interface UpdateProjectInput {
@@ -48,11 +99,20 @@ export interface UpdateProjectInput {
   name?: string;
   color?: string;
   viewMode?: string;
+  sortOrder?: number;
+  kind?: 'TASK' | 'NOTE';
+}
+
+export interface TickTickProjectDataEnvelope {
+  project: TickTickProject;
+  tasks: TickTickTask[];
+  columns: TickTickProjectColumn[];
 }
 
 interface TickTickProjectDataResponse {
   project?: TickTickProject;
   tasks?: TickTickTask[];
+  columns?: TickTickProjectColumn[];
 }
 
 const MAX_PROJECTS_FETCH = 25;
@@ -150,6 +210,72 @@ function matchesDueFilter(task: TickTickTask, filter: TaskDueFilter): boolean {
     default:
       return false;
   }
+}
+
+function toCalendarDateFromIsoInput(value: string, fieldName: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) {
+    throw new ValidationAppError(`Invalid ISO date string for ${fieldName}`, { [fieldName]: value });
+  }
+  return parsed.toISOString().slice(0, 10);
+}
+
+function normalizeTaskRecurrence(task: TickTickTask): TickTickTask {
+  const repeatFlag = task.repeatFlag ?? task.repeat;
+  if (!repeatFlag) {
+    return task;
+  }
+  return {
+    ...task,
+    repeatFlag,
+    repeat: repeatFlag,
+  };
+}
+
+function resolveRepeatFlagInput(repeat?: string, repeatFlag?: string): string | undefined {
+  const trimmedRepeat = repeat?.trim();
+  const trimmedRepeatFlag = repeatFlag?.trim();
+
+  if (trimmedRepeat && !trimmedRepeat.startsWith('RRULE:')) {
+    throw new ValidationAppError('repeat must start with RRULE:', { repeat });
+  }
+  if (trimmedRepeatFlag && !trimmedRepeatFlag.startsWith('RRULE:')) {
+    throw new ValidationAppError('repeatFlag must start with RRULE:', { repeatFlag });
+  }
+  if (trimmedRepeat && trimmedRepeatFlag && trimmedRepeat !== trimmedRepeatFlag) {
+    throw new ValidationAppError('repeat and repeatFlag must match when both are provided', {
+      repeat: trimmedRepeat,
+      repeatFlag: trimmedRepeatFlag,
+    });
+  }
+
+  return trimmedRepeatFlag ?? trimmedRepeat;
+}
+
+function compareStrings(left: string | undefined, right: string | undefined): number {
+  if (left === undefined && right === undefined) {
+    return 0;
+  }
+  if (left === undefined) {
+    return 1;
+  }
+  if (right === undefined) {
+    return -1;
+  }
+  return left.localeCompare(right);
+}
+
+function compareNumbers(left: number | undefined, right: number | undefined): number {
+  if (left === undefined && right === undefined) {
+    return 0;
+  }
+  if (left === undefined) {
+    return 1;
+  }
+  if (right === undefined) {
+    return -1;
+  }
+  return left - right;
 }
 
 export class TickTickClient {
@@ -427,6 +553,14 @@ export class TickTickClient {
     this.activeTaskIdsCache.delete(projectId);
   }
 
+  private normalizeTask(task: TickTickTask): TickTickTask {
+    return normalizeTaskRecurrence(task);
+  }
+
+  private normalizeTasks(tasks: TickTickTask[]): TickTickTask[] {
+    return tasks.map((task) => this.normalizeTask(task));
+  }
+
   private async getActiveTaskIds(projectId: string, forceRefresh = false): Promise<{ ids: Set<string>; fromCache: boolean }> {
     const cached = this.activeTaskIdsCache.get(projectId);
     const now = Date.now();
@@ -453,15 +587,50 @@ export class TickTickClient {
   }
 
   async createProject(input: CreateProjectInput): Promise<TickTickProject> {
-    return this.callApi<TickTickProject>({
-      path: '/project',
-      method: 'POST',
-      body: {
-        name: input.name,
-        color: input.color,
-        viewMode: input.viewMode,
-      },
-    });
+    try {
+      return await this.callApi<TickTickProject>({
+        path: '/project',
+        method: 'POST',
+        body: {
+          name: input.name,
+          color: input.color,
+          viewMode: input.viewMode,
+          sortOrder: input.sortOrder,
+          kind: input.kind,
+        },
+      });
+    } catch (error) {
+      if (!(error instanceof TickTickApiError)) {
+        throw error;
+      }
+
+      const responseBody = error.details?.responseBody;
+      const isUnknownException =
+        typeof responseBody === 'string' &&
+        responseBody.includes('"errorCode":"unknown_exception"') &&
+        error.details?.path === '/project';
+
+      if (!isUnknownException) {
+        throw error;
+      }
+
+      let projectCount: number | undefined;
+      try {
+        projectCount = (await this.listProjects()).length;
+      } catch {
+        // keep original unknown_exception if count lookup fails
+      }
+
+      throw new ValidationAppError(
+        projectCount === undefined
+          ? 'TickTick rejected project creation with unknown_exception. This may be due to account project limits or upstream issues.'
+          : `TickTick rejected project creation with unknown_exception. Current project count is ${projectCount}; this may indicate account project limits.`,
+        {
+          projectCount,
+          upstreamError: responseBody,
+        },
+      );
+    }
   }
 
   async updateProject(input: UpdateProjectInput): Promise<TickTickProject> {
@@ -472,14 +641,43 @@ export class TickTickClient {
         name: input.name,
         color: input.color,
         viewMode: input.viewMode,
+        sortOrder: input.sortOrder,
+        kind: input.kind,
       },
     });
   }
 
+  async deleteProject(projectId: string): Promise<void> {
+    await this.callApi<void>({
+      path: `/project/${projectId}`,
+      method: 'DELETE',
+    });
+  }
+
+  async getProjectData(projectId: string): Promise<TickTickProjectDataEnvelope> {
+    const data = await this.callApi<TickTickProjectDataResponse>({ path: `/project/${projectId}/data` });
+    const project = data.project;
+    if (!project) {
+      throw new TickTickApiError('TickTick API returned project data without project payload', 502, { projectId });
+    }
+
+    return {
+      project,
+      tasks: this.normalizeTasks(data.tasks ?? []),
+      columns: data.columns ?? [],
+    };
+  }
+
   async listTasks(input: ListTasksInput): Promise<{ tasks: TickTickTask[]; total: number }> {
+    if (input.status !== undefined && input.status !== 0) {
+      throw new ValidationAppError('status=2 is not supported for ticktick_list_tasks; only status=0 is supported', {
+        status: input.status,
+      });
+    }
+
     const collectFromProject = async (projectId: string): Promise<TickTickTask[]> => {
       const data = await this.callApi<TickTickProjectDataResponse>({ path: `/project/${projectId}/data` });
-      return data.tasks ?? [];
+      return this.normalizeTasks(data.tasks ?? []);
     };
 
     let tasks: TickTickTask[] = [];
@@ -500,6 +698,61 @@ export class TickTickClient {
 
     if (input.dueFilter) {
       tasks = tasks.filter((task) => matchesDueFilter(task, input.dueFilter!));
+    }
+
+    if (input.priority !== undefined) {
+      tasks = tasks.filter((task) => task.priority === input.priority);
+    }
+
+    const dueDateFrom = input.dueDateFrom ? toCalendarDateFromIsoInput(input.dueDateFrom, 'dueDateFrom') : undefined;
+    const dueDateTo = input.dueDateTo ? toCalendarDateFromIsoInput(input.dueDateTo, 'dueDateTo') : undefined;
+    if (dueDateFrom && dueDateTo && dueDateFrom > dueDateTo) {
+      throw new ValidationAppError('dueDateFrom must be less than or equal to dueDateTo', { dueDateFrom, dueDateTo });
+    }
+    if (dueDateFrom || dueDateTo) {
+      tasks = tasks.filter((task) => {
+        if (!task.dueDate) {
+          return false;
+        }
+        const taskDate = extractCalendarDate(task.dueDate);
+        if (dueDateFrom && taskDate < dueDateFrom) {
+          return false;
+        }
+        if (dueDateTo && taskDate > dueDateTo) {
+          return false;
+        }
+        return true;
+      });
+    }
+
+    if (input.sortBy) {
+      const direction = input.sortOrder === 'desc' ? -1 : 1;
+      tasks = [...tasks].sort((left, right) => {
+        let result = 0;
+        switch (input.sortBy) {
+          case 'title':
+            result = compareStrings(left.title, right.title);
+            break;
+          case 'priority':
+            result = compareNumbers(left.priority, right.priority);
+            break;
+          case 'sortOrder':
+            result = compareNumbers(left.sortOrder, right.sortOrder);
+            break;
+          case 'dueDate':
+            result = compareStrings(left.dueDate ? extractCalendarDate(left.dueDate) : undefined, right.dueDate ? extractCalendarDate(right.dueDate) : undefined);
+            break;
+          case 'createdTime':
+            result = compareStrings(left.createdTime, right.createdTime);
+            break;
+          case 'modifiedTime':
+            result = compareStrings(left.modifiedTime, right.modifiedTime);
+            break;
+          default:
+            result = 0;
+        }
+        return result * direction;
+      });
     }
 
     const total = tasks.length;
@@ -531,10 +784,11 @@ export class TickTickClient {
       }
     }
 
-    return task;
+    return this.normalizeTask(task);
   }
 
   async createTask(input: CreateTaskInput): Promise<TickTickTask> {
+    const repeatFlag = resolveRepeatFlagInput(input.repeat, input.repeatFlag);
     const task = await this.callApi<TickTickTask>({
       path: '/task',
       method: 'POST',
@@ -542,18 +796,25 @@ export class TickTickClient {
         projectId: input.projectId,
         title: input.title,
         content: input.content,
+        desc: input.desc,
+        isAllDay: input.isAllDay,
+        timeZone: input.timeZone,
+        reminders: input.reminders,
+        sortOrder: input.sortOrder,
+        kind: input.kind,
         items: input.items,
-        repeat: input.repeat,
+        repeatFlag,
         startDate: input.startDate,
         dueDate: input.dueDate,
         priority: input.priority,
       },
     });
     this.invalidateActiveTaskCache(input.projectId);
-    return task;
+    return this.normalizeTask(task);
   }
 
   async updateTask(input: UpdateTaskInput): Promise<TickTickTask> {
+    const repeatFlag = resolveRepeatFlagInput(input.repeat, input.repeatFlag);
     const task = await this.callApi<TickTickTask>({
       path: `/task/${input.taskId}`,
       method: 'POST',
@@ -561,15 +822,71 @@ export class TickTickClient {
         projectId: input.projectId,
         title: input.title,
         content: input.content,
+        desc: input.desc,
+        isAllDay: input.isAllDay,
+        timeZone: input.timeZone,
+        reminders: input.reminders,
+        sortOrder: input.sortOrder,
+        kind: input.kind,
         items: input.items,
-        repeat: input.repeat,
+        repeatFlag,
         startDate: input.startDate,
         dueDate: input.dueDate,
         priority: input.priority,
       },
     });
     this.invalidateActiveTaskCache(input.projectId);
-    return task;
+    return this.normalizeTask(task);
+  }
+
+  async patchTaskItems(input: PatchTaskItemsInput): Promise<TickTickTask> {
+    const task = await this.getTask(input.projectId, input.taskId);
+    const items = [...(task.items ?? [])];
+
+    for (const operation of input.operations) {
+      if (operation.op === 'add') {
+        const nextItem = { ...operation.item };
+        if (!nextItem.title || nextItem.title.trim().length === 0) {
+          throw new ValidationAppError('add item operation requires a non-empty title');
+        }
+        if (operation.index === undefined) {
+          items.push(nextItem);
+          continue;
+        }
+        if (!Number.isInteger(operation.index) || operation.index < 0 || operation.index > items.length) {
+          throw new ValidationAppError('add item index is out of range', { index: operation.index });
+        }
+        items.splice(operation.index, 0, nextItem);
+        continue;
+      }
+
+      const targetIndex = items.findIndex((item) => item.id === operation.id);
+      if (targetIndex < 0) {
+        throw new ValidationAppError(`Unknown checklist item id "${operation.id}"`, { id: operation.id });
+      }
+
+      if (operation.op === 'remove') {
+        items.splice(targetIndex, 1);
+        continue;
+      }
+
+      if (operation.op === 'toggle') {
+        const current = items[targetIndex].status === 1 ? 1 : 0;
+        items[targetIndex] = { ...items[targetIndex], status: current === 1 ? 0 : 1 };
+        continue;
+      }
+
+      items[targetIndex] = {
+        ...items[targetIndex],
+        ...operation.item,
+      };
+    }
+
+    return this.updateTask({
+      projectId: input.projectId,
+      taskId: input.taskId,
+      items,
+    });
   }
 
   async completeTask(projectId: string, taskId: string): Promise<void> {
