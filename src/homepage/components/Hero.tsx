@@ -8,7 +8,7 @@ export function Hero() {
         <span>Live on Cloudflare Workers</span>
       </div>
       <h1>
-        Manage TickTick<br />
+        Manage <a href="https://ticktick.com">TickTick</a><br />
         with <em>any MCP client</em>
       </h1>
       <p className="hero-sub">
