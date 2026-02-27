@@ -15,10 +15,10 @@ const PROJECT_TOOLS: ToolItem[] = [
 ];
 
 const TASK_TOOLS: ToolItem[] = [
-  { label: 'ticktick_list_tasks(status=0 only)', tone: 'green' },
+  { label: 'ticktick_list_tasks()', tone: 'green' },
   { label: 'ticktick_get_task()', tone: 'green' },
-  { label: 'ticktick_create_task(repeat?/repeatFlag?, items?)', tone: 'blue' },
-  { label: 'ticktick_update_task(repeat?/repeatFlag?, items?)', tone: 'blue' },
+  { label: 'ticktick_create_task()', tone: 'blue' },
+  { label: 'ticktick_update_task()', tone: 'blue' },
   { label: 'ticktick_patch_task_items()', tone: 'blue' },
   { label: 'ticktick_complete_task()', tone: 'orange' },
   { label: 'ticktick_delete_task()', tone: 'orange' },
@@ -51,7 +51,7 @@ export function SupportedTools() {
   return (
     <section className="page-section" id="api-surface">
       <h2 className="section-label">API Surface</h2>
-      <p className="setup-desc">Completed-task listing is intentionally unsupported in <code>ticktick_list_tasks</code>; use active filters with <code>status=0</code>.</p>
+      <p className="setup-desc">Active tasks only — completed-task listing is intentionally unsupported.</p>
 
       <div className="tools-columns">
         <div>
