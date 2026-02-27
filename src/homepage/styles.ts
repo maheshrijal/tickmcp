@@ -143,11 +143,26 @@ h1{
   margin-bottom:1rem;
   color:var(--ink);
 }
-h1 em{
+h1 em,
+h1 a{
   font-style:normal;
   background:linear-gradient(135deg,var(--accent),var(--orange));
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
   background-clip:text;
+  color:transparent;
+}
+h1 a{
+  text-decoration:none;
+}
+h1 a:hover,
+h1 a:visited{
+  color:transparent;
+  -webkit-text-fill-color:transparent;
+}
+h1 a:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:4px;
+  border-radius:4px;
 }
 
 .hero-sub{

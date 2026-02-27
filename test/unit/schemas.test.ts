@@ -4,6 +4,7 @@ import {
   createTaskSchema,
   listTasksSchema,
   normalizeDateInput,
+  patchTaskItemsSchema,
   updateProjectSchema,
   updateTaskSchema,
 } from '../../src/mcp/tools/schemas';
@@ -34,6 +35,11 @@ describe('tool schemas', () => {
     expect(() => listTasksSchema.parse({ dueFilter: 'next_month' })).toThrow();
   });
 
+  it('validates list task status supports only active status=0', () => {
+    expect(listTasksSchema.parse({ status: 0 })).toMatchObject({ status: 0 });
+    expect(() => listTasksSchema.parse({ status: 2 })).toThrow();
+  });
+
   it('normalizes valid dates to TickTick UTC offset format', () => {
     expect(normalizeDateInput('2026-02-08T10:30:00Z')).toBe('2026-02-08T10:30:00.000+0000');
   });
@@ -42,7 +48,7 @@ describe('tool schemas', () => {
     expect(normalizeDateInput('2026-02-08T10:30:00-05:00')).toBe('2026-02-08T15:30:00.000+0000');
   });
 
-  it('validates repeat requires RRULE prefix', () => {
+  it('accepts recurrence via repeat and repeatFlag aliases', () => {
     expect(
       createTaskSchema.parse({
         idempotencyKey: 'idem-repeat-1',
@@ -52,12 +58,33 @@ describe('tool schemas', () => {
       }),
     ).toMatchObject({ repeat: 'RRULE:FREQ=DAILY;INTERVAL=1' });
 
+    expect(
+      createTaskSchema.parse({
+        idempotencyKey: 'idem-repeat-1b',
+        projectId: 'project-1',
+        title: 'test',
+        repeatFlag: 'RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO',
+      }),
+    ).toMatchObject({ repeatFlag: 'RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO' });
+
     expect(() =>
       createTaskSchema.parse({
         idempotencyKey: 'idem-repeat-2',
         projectId: 'project-1',
         title: 'test',
         repeat: 'FREQ=DAILY;INTERVAL=1',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects conflicting repeat and repeatFlag values', () => {
+    expect(() =>
+      updateTaskSchema.parse({
+        idempotencyKey: 'idem-repeat-conflict',
+        projectId: 'project-1',
+        taskId: 'task-1',
+        repeat: 'RRULE:FREQ=DAILY;INTERVAL=1',
+        repeatFlag: 'RRULE:FREQ=WEEKLY;INTERVAL=1',
       }),
     ).toThrow();
   });
@@ -91,14 +118,69 @@ describe('tool schemas', () => {
     ).toMatchObject({ items: [{ id: 'item-1', title: 'a', status: 1 }] });
   });
 
+  it('validates extended task fields (reminders/timezone/kind/isAllDay/sortOrder)', () => {
+    expect(
+      createTaskSchema.parse({
+        idempotencyKey: 'idem-task-fields-1',
+        projectId: 'project-1',
+        title: 'test',
+        reminders: ['TRIGGER:P0DT0H30M0S'],
+        timeZone: 'America/New_York',
+        kind: 'CHECKLIST',
+        isAllDay: false,
+        sortOrder: 42,
+      }),
+    ).toMatchObject({
+      reminders: ['TRIGGER:P0DT0H30M0S'],
+      timeZone: 'America/New_York',
+      kind: 'CHECKLIST',
+      isAllDay: false,
+      sortOrder: 42,
+    });
+  });
+
+  it('validates patch task items operation schema', () => {
+    expect(
+      patchTaskItemsSchema.parse({
+        idempotencyKey: 'idem-patch-1',
+        projectId: 'project-1',
+        taskId: 'task-1',
+        operations: [
+          { op: 'add', item: { title: 'new item' } },
+          { op: 'toggle', id: 'item-1' },
+          { op: 'remove', id: 'item-2' },
+          { op: 'update', id: 'item-3', item: { status: 1 } },
+        ],
+      }),
+    ).toMatchObject({
+      operations: [
+        { op: 'add' },
+        { op: 'toggle', id: 'item-1' },
+        { op: 'remove', id: 'item-2' },
+        { op: 'update', id: 'item-3' },
+      ],
+    });
+
+    expect(() =>
+      patchTaskItemsSchema.parse({
+        idempotencyKey: 'idem-patch-2',
+        projectId: 'project-1',
+        taskId: 'task-1',
+        operations: [{ op: 'update', id: 'item-3', item: {} }],
+      }),
+    ).toThrow();
+  });
+
   it('validates project create and update schemas', () => {
     expect(
       createProjectSchema.parse({
         idempotencyKey: 'idem-project-1',
         name: 'Work',
         color: '#4f46e5',
+        sortOrder: 10,
+        kind: 'TASK',
       }),
-    ).toMatchObject({ name: 'Work' });
+    ).toMatchObject({ name: 'Work', sortOrder: 10, kind: 'TASK' });
 
     expect(() =>
       updateProjectSchema.parse({
@@ -112,7 +194,8 @@ describe('tool schemas', () => {
         idempotencyKey: 'idem-project-3',
         projectId: 'project-1',
         viewMode: 'kanban',
+        kind: 'NOTE',
       }),
-    ).toMatchObject({ viewMode: 'kanban' });
+    ).toMatchObject({ viewMode: 'kanban', kind: 'NOTE' });
   });
 });

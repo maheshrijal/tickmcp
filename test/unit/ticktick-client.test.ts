@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TickTickClient } from '../../src/ticktick/client';
 import { Props } from '../../src/auth/props';
 import { Env } from '../../src/types/env';
-import { TaskNotFoundError, TickTickAuthRequiredError, TickTickRateLimitError } from '../../src/utils/errors';
+import { TaskNotFoundError, TickTickAuthRequiredError, TickTickRateLimitError, ValidationAppError } from '../../src/utils/errors';
 
 function makeProps(overrides?: Partial<Props>): Props {
   return {
@@ -426,6 +426,29 @@ describe('TickTickClient', () => {
     expect(result.tasks.map((task) => task.id)).toEqual(['today']);
   });
 
+  it('rejects listTasks status=2 with ValidationAppError', async () => {
+    const client = new TickTickClient(makeEnv(), makeProps(), vi.fn() as unknown as typeof fetch);
+    await expect(client.listTasks({ projectId: 'p1', status: 2 as unknown as 0 })).rejects.toBeInstanceOf(ValidationAppError);
+  });
+
+  it('listTasks status=0 returns only active tasks', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          tasks: [
+            { id: 'active', projectId: 'p1', title: 'active', status: 0 },
+            { id: 'completed', projectId: 'p1', title: 'completed', status: 2 },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    const result = await client.listTasks({ projectId: 'p1', status: 0 });
+    expect(result.tasks.map((task) => task.id)).toEqual(['active']);
+  });
+
   it('dueFilter this_week excludes overdue and includes today plus next six days', async () => {
     const now = new Date();
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
@@ -458,7 +481,7 @@ describe('TickTickClient', () => {
     expect(result.tasks.map((task) => task.id)).toEqual(['today', 'plus6']);
   });
 
-  it('sends recurrence and checklist items in createTask/updateTask payloads', async () => {
+  it('sends repeatFlag and extended task fields in createTask/updateTask payloads', async () => {
     const seenBodies: Array<Record<string, unknown>> = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const method = (init?.method ?? 'GET').toUpperCase();
@@ -491,28 +514,78 @@ describe('TickTickClient', () => {
       projectId: 'p1',
       title: 'new',
       repeat: 'RRULE:FREQ=DAILY;INTERVAL=1',
+      desc: 'plain description',
+      isAllDay: true,
+      timeZone: 'America/New_York',
+      reminders: ['TRIGGER:P0DT0H30M0S'],
+      sortOrder: 99,
+      kind: 'CHECKLIST',
       items: [{ title: 'item-a', status: 0 }],
     });
     await client.updateTask({
       projectId: 'p1',
       taskId: 't1',
-      repeat: 'RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO',
+      repeatFlag: 'RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO',
+      desc: 'updated description',
       items: [{ id: 'i1', title: 'item-a', status: 1 }],
     });
 
     expect(seenBodies).toHaveLength(2);
-    expect(seenBodies[0].repeat).toBe('RRULE:FREQ=DAILY;INTERVAL=1');
+    expect(seenBodies[0].repeatFlag).toBe('RRULE:FREQ=DAILY;INTERVAL=1');
+    expect(seenBodies[0].repeat).toBeUndefined();
+    expect(seenBodies[0].desc).toBe('plain description');
+    expect(seenBodies[0].isAllDay).toBe(true);
+    expect(seenBodies[0].timeZone).toBe('America/New_York');
+    expect(seenBodies[0].reminders).toEqual(['TRIGGER:P0DT0H30M0S']);
+    expect(seenBodies[0].sortOrder).toBe(99);
+    expect(seenBodies[0].kind).toBe('CHECKLIST');
     expect(seenBodies[0].items).toEqual([{ title: 'item-a', status: 0 }]);
-    expect(seenBodies[1].repeat).toBe('RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO');
+    expect(seenBodies[1].repeatFlag).toBe('RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO');
+    expect(seenBodies[1].repeat).toBeUndefined();
+    expect(seenBodies[1].desc).toBe('updated description');
     expect(seenBodies[1].items).toEqual([{ id: 'i1', title: 'item-a', status: 1 }]);
   });
 
+  it('normalizes inbound repeatFlag to both repeat and repeatFlag in task outputs', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: 't-repeat',
+          projectId: 'p1',
+          title: 'recurring',
+          status: 2,
+          repeatFlag: 'RRULE:FREQ=DAILY;INTERVAL=1',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    const task = await client.getTask('p1', 't-repeat');
+    expect(task.repeatFlag).toBe('RRULE:FREQ=DAILY;INTERVAL=1');
+    expect(task.repeat).toBe('RRULE:FREQ=DAILY;INTERVAL=1');
+  });
+
+  it('rejects conflicting repeat and repeatFlag in client runtime validation', async () => {
+    const client = new TickTickClient(makeEnv(), makeProps(), vi.fn() as unknown as typeof fetch);
+    await expect(
+      client.createTask({
+        projectId: 'p1',
+        title: 'conflict',
+        repeat: 'RRULE:FREQ=DAILY;INTERVAL=1',
+        repeatFlag: 'RRULE:FREQ=WEEKLY;INTERVAL=1',
+      }),
+    ).rejects.toBeInstanceOf(ValidationAppError);
+  });
+
   it('creates and updates projects via project endpoints', async () => {
+    const seenBodies: Array<Record<string, unknown>> = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const method = (init?.method ?? 'GET').toUpperCase();
       const url = new URL(typeof input === 'string' ? input : input.toString());
       const path = url.pathname;
       const body = JSON.parse((init?.body as string) ?? '{}') as Record<string, unknown>;
+      seenBodies.push(body);
 
       if (path === '/open/v1/project' && method === 'POST') {
         return new Response(JSON.stringify({ id: 'p1', name: body.name, color: body.color }), {
@@ -532,10 +605,191 @@ describe('TickTickClient', () => {
     });
 
     const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
-    const created = await client.createProject({ name: 'Work', color: '#2563eb' });
-    const updated = await client.updateProject({ projectId: 'p1', viewMode: 'kanban' });
+    const created = await client.createProject({ name: 'Work', color: '#2563eb', sortOrder: 1, kind: 'TASK' });
+    const updated = await client.updateProject({ projectId: 'p1', viewMode: 'kanban', kind: 'NOTE', sortOrder: 2 });
 
     expect(created).toMatchObject({ id: 'p1', name: 'Work', color: '#2563eb' });
     expect(updated).toMatchObject({ id: 'p1', viewMode: 'kanban' });
+    expect(seenBodies[0]).toMatchObject({ name: 'Work', color: '#2563eb', sortOrder: 1, kind: 'TASK' });
+    expect(seenBodies[1]).toMatchObject({ viewMode: 'kanban', kind: 'NOTE', sortOrder: 2 });
+  });
+
+  it('maps createProject unknown_exception to ValidationAppError with project-count context', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            errorId: 'amie8bv0@erver-14',
+            errorCode: 'unknown_exception',
+            errorMessage: 'Unknown exception',
+            data: null,
+          }),
+          { status: 500, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            errorId: 'amie8bv0@erver-14',
+            errorCode: 'unknown_exception',
+            errorMessage: 'Unknown exception',
+            data: null,
+          }),
+          { status: 500, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            errorId: 'amie8bv0@erver-14',
+            errorCode: 'unknown_exception',
+            errorMessage: 'Unknown exception',
+            data: null,
+          }),
+          { status: 500, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 'p1', name: 'one' }, { id: 'p2', name: 'two' }]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    await expect(client.createProject({ name: 'new project' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: expect.objectContaining({
+        projectCount: 2,
+      }),
+    });
+  });
+
+  it('gets project data envelope with project/tasks/columns', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          project: { id: 'p1', name: 'Work' },
+          tasks: [{ id: 't1', projectId: 'p1', title: 'Task 1', repeatFlag: 'RRULE:FREQ=DAILY;INTERVAL=1' }],
+          columns: [{ id: 'c1', projectId: 'p1', name: 'Todo', sortOrder: 10 }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    const data = await client.getProjectData('p1');
+    expect(data.project).toMatchObject({ id: 'p1', name: 'Work' });
+    expect(data.tasks[0]).toMatchObject({
+      id: 't1',
+      repeat: 'RRULE:FREQ=DAILY;INTERVAL=1',
+      repeatFlag: 'RRULE:FREQ=DAILY;INTERVAL=1',
+    });
+    expect(data.columns).toHaveLength(1);
+  });
+
+  it('deletes project via project endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    await expect(client.deleteProject('p1')).resolves.toBeUndefined();
+  });
+
+  it('patches task items with deterministic operations and unknown-id guard', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+      const path = new URL(typeof input === 'string' ? input : input.toString()).pathname;
+
+      if (path === '/open/v1/project/p1/task/t1' && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            id: 't1',
+            projectId: 'p1',
+            title: 'Task 1',
+            status: 0,
+            items: [
+              { id: 'i1', title: 'one', status: 0, sortOrder: 1 },
+              { id: 'i2', title: 'two', status: 1, sortOrder: 2 },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+
+      if (path === '/open/v1/project/p1/data' && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            tasks: [{ id: 't1', projectId: 'p1', title: 'Task 1', status: 0 }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+
+      if (path === '/open/v1/task/t1' && method === 'POST') {
+        const body = JSON.parse((init?.body as string) ?? '{}') as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            id: 't1',
+            projectId: 'p1',
+            title: 'Task 1',
+            status: 0,
+            items: body.items,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+
+      throw new Error(`Unhandled mocked request: ${method} ${path}`);
+    });
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    const patched = await client.patchTaskItems({
+      projectId: 'p1',
+      taskId: 't1',
+      operations: [
+        { op: 'toggle', id: 'i1' },
+        { op: 'update', id: 'i2', item: { title: 'two-updated' } },
+        { op: 'add', item: { title: 'three', status: 0 }, index: 1 },
+        { op: 'remove', id: 'i1' },
+      ],
+    });
+    expect(patched.items).toEqual([
+      { title: 'three', status: 0 },
+      { id: 'i2', title: 'two-updated', status: 1, sortOrder: 2 },
+    ]);
+
+    await expect(
+      client.patchTaskItems({
+        projectId: 'p1',
+        taskId: 't1',
+        operations: [{ op: 'remove', id: 'missing' }],
+      }),
+    ).rejects.toBeInstanceOf(ValidationAppError);
+  });
+
+  it('supports listTasks sort and date-range filtering', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          tasks: [
+            { id: 'a', projectId: 'p1', title: 'a', dueDate: '2026-03-10T10:00:00.000+0000', priority: 1 },
+            { id: 'b', projectId: 'p1', title: 'b', dueDate: '2026-03-12T10:00:00.000+0000', priority: 5 },
+            { id: 'c', projectId: 'p1', title: 'c', dueDate: '2026-03-08T10:00:00.000+0000', priority: 5 },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    const client = new TickTickClient(makeEnv(), makeProps(), fetchMock as unknown as typeof fetch);
+    const result = await client.listTasks({
+      projectId: 'p1',
+      priority: 5,
+      dueDateFrom: '2026-03-09',
+      dueDateTo: '2026-03-12',
+      sortBy: 'dueDate',
+      sortOrder: 'desc',
+    });
+    expect(result.tasks.map((task) => task.id)).toEqual(['b']);
   });
 });
