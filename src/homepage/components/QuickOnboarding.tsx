@@ -1,10 +1,26 @@
 import { CodeBlock } from './CodeBlock';
 
 const BASE_URL = '__BASE_URL__';
-const ONBOARDING_ITEMS = [
-  { name: 'Codex', snippet: `codex mcp add tickmcp --url ${BASE_URL}/mcp` },
-  { name: 'Claude Code', snippet: `claude mcp add tickmcp --transport http ${BASE_URL}/mcp` },
+
+type OnboardingItem = {
+  step: string;
+  name: string;
+  snippet: string;
+};
+
+const ONBOARDING_ITEMS: OnboardingItem[] = [
   {
+    step: '01',
+    name: 'Codex',
+    snippet: `codex mcp add tickmcp --url ${BASE_URL}/mcp`,
+  },
+  {
+    step: '02',
+    name: 'Claude Code',
+    snippet: `claude mcp add tickmcp --transport http ${BASE_URL}/mcp`,
+  },
+  {
+    step: '03',
     name: 'Claude Desktop / Cursor',
     snippet: `{
   "mcpServers": {
@@ -25,6 +41,7 @@ export function QuickOnboarding() {
         {ONBOARDING_ITEMS.map((item) => (
           <div key={item.name} className="setup-item">
             <div className="setup-header">
+              <span className="setup-step">{item.step}</span>
               <span className="setup-name">{item.name}</span>
             </div>
             <CodeBlock>{item.snippet}</CodeBlock>
@@ -33,6 +50,7 @@ export function QuickOnboarding() {
 
         <div className="setup-item">
           <div className="setup-header">
+            <span className="setup-step">04</span>
             <span className="setup-name">ChatGPT / Claude</span>
           </div>
           <p className="setup-desc">Add as a remote MCP server with this URL:</p>
