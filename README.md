@@ -1,5 +1,10 @@
 # tickmcp
 
+> [!IMPORTANT]
+> This project is archived and no longer maintained. TickTick now provides an
+> [official MCP integration](https://help.ticktick.com/articles/7438129581631995904),
+> which should be used instead.
+
 Remote multi-user [TickTick](https://ticktick.com) MCP server on Cloudflare Workers.
 
 Streamable HTTP transport · OAuth 2.1 · Structured output
